@@ -7,19 +7,19 @@ MOSES=/home/is/akiba-mi/exp/moses
 IRSTLM=~/exp/irstlm
 GIZA=~/usr/local/bin
 
-#TRAIN_SIZE=40000
-#TEST_SIZE=10000
-#DEV_SIZE=5000
-
-TRAIN_SIZE=4000
-TEST_SIZE=1000
-DEV_SIZE=500
+dir=$(cd $(dirname $0); pwd)
+echo DIRNAME: $dirname
 
 echo "running script with PID: $$"
 
 usage()
 {
-  echo "usage: $0 lang_id1 src1 lang_id2 src2 [test_size]"
+  echo "usage: $0 lang_id1 src1 lang_id2 src2"
+  echo ""
+  echo "options:"
+  echo "  --train_size={int}"
+  echo "  --test_size={int}"
+  echo "  --dev_size={int}"
 }
 
 show_exec()
@@ -29,7 +29,7 @@ show_exec()
 
   if [ $? -gt 0 ]
   then
-    echo "[error]"
+    echo "[error on exec]: $*"
     exit 1
   fi
 }
@@ -43,6 +43,12 @@ proc_args()
   do
     arg=$1
     case $arg in
+      --*=* )
+        opt=${arg#--}
+        name=${opt%=*}
+        var=${opt#*=}
+        eval "opt_${name}=${var}"
+        ;;
       -* )
         OPTS+=($arg)
         ;;
@@ -53,37 +59,6 @@ proc_args()
 
     shift
   done
-}
-
-tokenize()
-{
-  lang=$1
-  prefix=$2
-  src=${corpus}/${prefix}.${lang}
-  output=${corpus}/${prefix}.tok.${lang}
-
-  if [ $lang = "zh" ]
-  then
-    show_exec $KYTEA -notags -model $KYTEA_ZH_DIC \< ${src} \> ${output}
-  else
-    show_exec ~/exp/moses/scripts/tokenizer/tokenizer.perl -l $lang \< $src \> ${output}
-  fi
-}
-
-train_truecaser()
-{
-  lang=$1
-  prefix=$2
-  src=${corpus}/${prefix}.tok.${lang}
-  model=${corpus}/truecase-model.${lang}
-  show_exec $MOSES/scripts/recaser/train-truecaser.perl --model ${model} --corpus ${src}
-}
-
-truecase()
-{
-  lang=$1
-  prefix=$2
-  show_exec $MOSES/scripts/recaser/truecase.perl --model ${corpus}/truecase-model.${lang} \< ${corpus}/${prefix}.tok.${lang} \> ${corpus}/${prefix}.true.${lang}
 }
 
 proc_args $*
@@ -99,51 +74,22 @@ src1=${ARGS[1]}
 lang2=${ARGS[2]}
 src2=${ARGS[3]}
 
-declare -i test_size
-test_size=$TEST_SIZE
-if [ ${#ARGS[@]} -gt 4 ]
+options=""
+if [ $opt_train_size ]
 then
-  test_size=${ARGS[4]}
-  if [ $test_size -lt 1 ]
-  then
-    test_size=$TEST_SIZE
-  fi
+  options="$options --train_size=${opt_train_size}"
 fi
+if [ $opt_test_size ]
+then
+  options="$options --test_size=${opt_test_size}"
+fi
+if [ $opt_dev_size ]
+then
+  options="$options --dev_size=${opt_dev_size}"
+fi
+show_exec "${dir}/format_corpus.sh" ${lang1} ${src1} ${lang2} ${src2} ${options}
 
-corpus=corpus_${lang1}-${lang2}
-show_exec mkdir -p $corpus
-show_exec head -${TRAIN_SIZE} ${src1} \> $corpus/train.${lang1}
-show_exec head -${TRAIN_SIZE} ${src2} \> $corpus/train.${lang2}
-
-#show_exec head -${test_size} $corpus/train.${lang1} \> $corpus/test.${lang1}
-#show_exec head -${test_size} $corpus/train.${lang2} \> $corpus/test.${lang2}
-
-show_exec head -${test_size} ${src1} \> $corpus/test.${lang1}
-show_exec head -${test_size} ${src2} \> $corpus/test.${lang2}
-
-#show_exec tail -n +${test_size} ${src1} \> $corpus/train.${lang1}
-#show_exec tail -n +${test_size} ${src2} \> $corpus/train.${lang2}
-
-show_exec head -${DEV_SIZE} ${src1} \> $corpus/dev.${lang1}
-show_exec head -${DEV_SIZE} ${src2} \> $corpus/dev.${lang2}
-
-tokenize ${lang1} train
-tokenize ${lang2} train
-tokenize ${lang1} test
-tokenize ${lang2} test
-tokenize ${lang1} dev
-tokenize ${lang2} dev
-
-train_truecaser ${lang1} train
-train_truecaser ${lang2} train
-
-truecase ${lang1} train
-truecase ${lang2} train
-truecase ${lang1} dev
-truecase ${lang2} dev
-
-show_exec ~/exp/moses/scripts/training/clean-corpus-n.perl $corpus/train.true ${lang1} ${lang2} $corpus/train.clean 1 80
-
+corpus="corpus_${lang1}-${lang2}"
 langdir=LM_${lang2}
 show_exec mkdir -p $langdir
 show_exec $IRSTLM/bin/add-start-end.sh \< $corpus/train.true.${lang2} \> $langdir/train.sb.${lang2}

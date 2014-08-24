@@ -5,21 +5,21 @@ KYTEA_ZH_DIC=/home/is/akiba-mi/usr/local/share/kytea/lcmc-0.4.0-1.mod
 MOSES=/home/is/akiba-mi/exp/moses
 
 IRSTLM=~/exp/irstlm
-GIZA=~/usr/local/bin
 
-#TRAIN_SIZE=40000
-#TEST_SIZE=10000
-#DEV_SIZE=5000
-
-TRAIN_SIZE=4000
-TEST_SIZE=1000
+TRAIN_SIZE=10000
+TEST_SIZE=2500
 DEV_SIZE=500
 
-echo "running script with PID: $$"
+#echo "running script with PID: $$"
 
 usage()
 {
-  echo "usage: $0 lang_id1 src1 lang_id2 src2 [test_size]"
+  echo "usage: $0 lang_id1 src1 lang_id2 src2"
+  echo ""
+  echo "options:"
+  echo "  --train_size={int}"
+  echo "  --test_size={int}"
+  echo "  --dev_size={int}"
 }
 
 show_exec()
@@ -29,7 +29,7 @@ show_exec()
 
   if [ $? -gt 0 ]
   then
-    echo "[error]"
+    echo "[error on exec] $*"
     exit 1
   fi
 }
@@ -43,14 +43,11 @@ proc_args()
   do
     arg=$1
     case $arg in
-      --train_size=* )
-        train_size=${arg#*=}
-        ;;
-      --test_size=* )
-        test_size=${arg#*=}
-        ;;
-      --dev_size=* )
-        dev_size=${arg#*=}
+      --*=* )
+        opt=${arg#--}
+        name=${opt%=*}
+        var=${opt#*=}
+        eval "opt_${name}=${var}"
         ;;
       -* )
         OPTS+=($arg)
@@ -109,38 +106,23 @@ lang2=${ARGS[2]}
 src2=${ARGS[3]}
 
 
-declare -i train_size
-if [ ! $train_size ]
-then
-  train_size=$TRAIN_SIZE
-fi
+declare -i train_size=$opt_train_size
 if [ $train_size -lt 1 ]
 then
   train_size=$TRAIN_SIZE
 fi
 
-
-declare -i test_size
-if [ ! $test_size ]
-then
-  test_size=$TEST_SIZE
-fi
+declare -i test_size=$opt_test_size
 if [ $test_size -lt 1 ]
 then
   test_size=$TEST_SIZE
 fi
 
-
-declare -i dev_size
-if [ ! $dev_size ]
-then
-  dev_size=$DEV_SIZE
-fi
+declare -i dev_size=$opt_dev_size
 if [ $dev_size -lt 1 ]
 then
   dev_size=$TEST_SIZE
 fi
-
 
 echo TRAIN_SIZE: $train_size
 echo TEST_SIZE : $test_size
