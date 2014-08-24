@@ -8,7 +8,6 @@ IRSTLM=~/exp/irstlm
 GIZA=~/usr/local/bin
 
 dir=$(cd $(dirname $0); pwd)
-echo DIRNAME: $dirname
 
 echo "running script with PID: $$"
 
@@ -20,6 +19,7 @@ usage()
   echo "  --train_size={int}"
   echo "  --test_size={int}"
   echo "  --dev_size={int}"
+  echo "  --task_name={string}"
 }
 
 show_exec()
@@ -74,6 +74,12 @@ src1=${ARGS[1]}
 lang2=${ARGS[2]}
 src2=${ARGS[3]}
 
+if [ $opt_task_name ]; then
+  task=$opt_task_name
+else
+  task="moses_${lang1}-${lang2}"
+fi
+
 options=""
 if [ $opt_train_size ]
 then
@@ -87,22 +93,21 @@ if [ $opt_dev_size ]
 then
   options="$options --dev_size=${opt_dev_size}"
 fi
+options="$options --task_name=${task}"
 show_exec "${dir}/format_corpus.sh" ${lang1} ${src1} ${lang2} ${src2} ${options}
 
-corpus="corpus_${lang1}-${lang2}"
-langdir=LM_${lang2}
-show_exec mkdir -p $langdir
-show_exec $IRSTLM/bin/add-start-end.sh \< $corpus/train.true.${lang2} \> $langdir/train.sb.${lang2}
-show_exec $IRSTLM/bin/build-lm.sh -i $langdir/train.sb.${lang2} -p -s improved-kneser-ney -o $langdir/train.lm.${lang2}
-show_exec $IRSTLM/bin/compile-lm --text $langdir/train.lm.${lang2}.gz $langdir/train.arpa.${lang2}
-show_exec $MOSES/bin/build_binary $langdir/train.arpa.${lang2} $langdir/train.blm.${lang2}
+corpus="${task}/corpus"
+show_exec "${dir}/train_lm.sh" ${lang2} ${corpus}/train.true.${lang2} --task_name=${task}
 
-show_exec mkdir -p output
-transdir=moses_${lang1}-${lang2}
-show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering msd-bidirectional-fe -lm 0:3:$(pwd)/$langdir/train.blm.${lang2}:8 -external-bin-dir $GIZA -cores 4 \> output/training_${lang1}-${lang2}.out
+langdir="${task}/LM_${lang2}"
+transdir="${task}/TM"
+#transdir="${task}/TM_${lang1}-${lang2}"
+show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering msd-bidirectional-fe -lm 0:3:$(pwd)/$langdir/train.blm.${lang2}:8 -external-bin-dir $GIZA -cores 4 \> ${task}/training.out
 
-workdir=working_${lang1}-${lang2}
-show_exec mkdir -p ${workdir}
-show_exec cd ${workdir}
-show_exec $MOSES/scripts/training/mert-moses.pl ../${corpus}/dev.true.${lang1} ../${corpus}/dev.true.${lang2} $MOSES/bin/moses ../${transdir}/model/moses.ini --mertdir $MOSES/bin \> mert.out
+workdir="${task}/working"
+orig=$PWD
+#show_exec mkdir -p ${workdir}
+#show_exec cd ${workdir}
+#show_exec $MOSES/scripts/training/mert-moses.pl ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} $MOSES/bin/moses ${orig}/${transdir}/model/moses.ini --mertdir $MOSES/bin \> mert.out
+show_exec ${dir}/tune_moses.sh ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} ${orig}/${transdir}/model/moses.ini ${task}
 

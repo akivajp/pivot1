@@ -20,6 +20,7 @@ usage()
   echo "  --train_size={int}"
   echo "  --test_size={int}"
   echo "  --dev_size={int}"
+  echo "  --task_name={string}"
 }
 
 show_exec()
@@ -128,7 +129,11 @@ echo TRAIN_SIZE: $train_size
 echo TEST_SIZE : $test_size
 echo DEV_SIZE  : $dev_size
 
-corpus=corpus_${lang1}-${lang2}
+if [ $opt_task_name ]; then
+  corpus="${opt_task_name}/corpus"
+else
+  corpus=corpus_${lang1}-${lang2}
+fi
 show_exec mkdir -p $corpus
 show_exec head -${train_size} ${src1} \> $corpus/train.${lang1}
 show_exec head -${train_size} ${src2} \> $corpus/train.${lang2}
