@@ -162,6 +162,8 @@ train_truecaser ${lang2} train
 
 truecase ${lang1} train
 truecase ${lang2} train
+truecase ${lang1} test
+truecase ${lang2} test
 truecase ${lang1} dev
 truecase ${lang2} dev
 

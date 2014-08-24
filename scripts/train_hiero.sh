@@ -2,10 +2,11 @@
 
 KYTEA=/home/is/akiba-mi/usr/local/bin/kytea
 KYTEA_ZH_DIC=/home/is/akiba-mi/usr/local/share/kytea/lcmc-0.4.0-1.mod
-MOSES=/home/is/akiba-mi/exp/moses
 
 IRSTLM=~/exp/irstlm
 GIZA=~/usr/local/bin
+TRAVATAR=$HOME/exp/travatar
+BIN=$HOME/usr/local/bin
 
 dir=$(cd $(dirname $0); pwd)
 
@@ -83,7 +84,7 @@ src2=${ARGS[3]}
 if [ $opt_task_name ]; then
   task=$opt_task_name
 else
-  task="moses_${lang1}-${lang2}"
+  task="hiero_${lang1}-${lang2}"
 fi
 
 options=""
@@ -106,22 +107,23 @@ corpus="${task}/corpus"
 show_exec "${dir}/train_lm.sh" ${lang2} ${corpus}/train.true.${lang2} --task_name=${task}
 
 langdir="${task}/LM_${lang2}"
-transdir="${task}/TM"
-#transdir="${task}/TM_${lang1}-${lang2}"
-show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering msd-bidirectional-fe -lm 0:3:$(pwd)/$langdir/train.blm.${lang2}:8 -external-bin-dir $GIZA -cores 4 \> ${task}/training.out
 
+transdir="${task}/TM"
 workdir="${task}/working"
+
+show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${transdir} -src_file ${corpus}/train.clean.${lang1} -trg_file ${corpus}/train.clean.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${langdir}/train.blm.${lang2}
+
 orig=$PWD
 
-if [ $opt_tuning ]; then
-  show_exec ${dir}/tune_moses.sh ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} ${orig}/${transdir}/model/moses.ini ${task}
-fi
-
-if [ $opt_test ]; then
-  show_exec ${dir}/test_moses.sh ${task} ${transdir}/model/moses.ini \> ${workdir}/score1
-
-  if [ $opt_tuning ]; then
-    show_exec ${dir}/test_moses.sh ${task} ${workdir}/mert-work/moses.ini \> ${workdir}/score2
-  fi
-fi
+#if [ $opt_tuning ]; then
+#  show_exec ${dir}/tune_moses.sh ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} ${orig}/${transdir}/model/moses.ini ${task}
+#fi
+#
+#if [ $opt_test ]; then
+#  show_exec ${dir}/test_moses.sh ${task} ${transdir}/model/moses.ini \> ${workdir}/score1
+#
+#  if [ $opt_tuning ]; then
+#    show_exec ${dir}/test_moses.sh ${task} ${workdir}/mert-work/moses.ini \> ${workdir}/score2
+#  fi
+#fi
 
