@@ -115,15 +115,15 @@ show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${t
 
 orig=$PWD
 
-#if [ $opt_tuning ]; then
-#  show_exec ${dir}/tune_moses.sh ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} ${orig}/${transdir}/model/moses.ini ${task}
-#fi
-#
-#if [ $opt_test ]; then
-#  show_exec ${dir}/test_moses.sh ${task} ${transdir}/model/moses.ini \> ${workdir}/score1
-#
-#  if [ $opt_tuning ]; then
-#    show_exec ${dir}/test_moses.sh ${task} ${workdir}/mert-work/moses.ini \> ${workdir}/score2
-#  fi
-#fi
+if [ $opt_tuning ]; then
+  show_exec ${dir}/tune_travatar.sh ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} ${orig}/${transdir}/model/travatar.ini ${task}
+fi
+
+if [ $opt_test ]; then
+  show_exec ${dir}/test_travatar.sh ${task} ${transdir}/model/travatar.ini \> ${workdir}/score1
+
+  if [ $opt_tuning ]; then
+    show_exec ${dir}/test_travatar.sh ${task} ${workdir}/travatar.ini \> ${workdir}/score2
+  fi
+fi
 

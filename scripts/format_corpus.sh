@@ -6,9 +6,13 @@ MOSES=/home/is/akiba-mi/exp/moses
 
 IRSTLM=~/exp/irstlm
 
-TRAIN_SIZE=10000
-TEST_SIZE=2500
-DEV_SIZE=500
+TRAIN_SIZE=50000
+TEST_SIZE=10000
+DEV_SIZE=100
+
+#TRAIN_SIZE=10000
+#TEST_SIZE=2500
+#DEV_SIZE=500
 
 #echo "running script with PID: $$"
 
