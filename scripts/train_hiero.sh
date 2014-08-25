@@ -127,3 +127,5 @@ if [ $opt_test ]; then
   fi
 fi
 
+echo "End of script: $0"
+

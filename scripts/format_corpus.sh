@@ -126,7 +126,7 @@ fi
 declare -i dev_size=$opt_dev_size
 if [ $dev_size -lt 1 ]
 then
-  dev_size=$TEST_SIZE
+  dev_size=$DEV_SIZE
 fi
 
 echo TRAIN_SIZE: $train_size
