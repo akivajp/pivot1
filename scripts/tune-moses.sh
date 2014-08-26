@@ -1,8 +1,11 @@
 #!/bin/bash
 
-MOSES=/home/is/akiba-mi/exp/moses
+MOSES=$HOME/exp/moses
+BIN=$HOME/usr/local/bin
 
 dir=$(cd $(dirname $0); pwd)
+
+THREADS=10
 
 usage()
 {
@@ -64,5 +67,5 @@ task=${ARGS[3]}
 workdir="${task}/working"
 show_exec mkdir -p ${workdir}
 show_exec cd ${workdir}
-show_exec $MOSES/scripts/training/mert-moses.pl ${src1} ${src2} $MOSES/bin/moses ${moses_ini} --mertdir $MOSES/bin \> mert.out
+show_exec $MOSES/scripts/training/mert-moses.pl ${src1} ${src2} ${BIN}/moses ${moses_ini} --mertdir $MOSES/bin --threads ${THREADS} \> mert.out
 

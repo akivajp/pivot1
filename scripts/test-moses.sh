@@ -68,6 +68,6 @@ workdir="${task}/working"
 corpus="${task}/corpus"
 
 show_exec mkdir -p ${workdir}
-show_exec ${MOSES}/bin/moses -f ${moses_ini} \< ${corpus}/test.true.${lang1} \> ${workdir}/translated
-show_exec ${MOSES}/scripts/generic/multi-bleu.perl -lc ${corpus}/test.true.${lang2} \< ${workdir}/translated
+show_exec ${MOSES}/bin/moses -f ${moses_ini} \< ${corpus}/test.true.${lang1} \> ${workdir}/translated.out
+show_exec ${MOSES}/scripts/generic/multi-bleu.perl -lc ${corpus}/test.true.${lang2} \< ${workdir}/translated.out
 

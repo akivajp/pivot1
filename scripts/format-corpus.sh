@@ -139,20 +139,29 @@ else
   corpus=corpus_${lang1}-${lang2}
 fi
 show_exec mkdir -p $corpus
-show_exec head -${train_size} ${src1} \> $corpus/train.${lang1}
-show_exec head -${train_size} ${src2} \> $corpus/train.${lang2}
+
+show_exec head -n ${train_size} ${src1} \> $corpus/train.${lang1}
+show_exec head -n ${train_size} ${src2} \> $corpus/train.${lang2}
 
 #show_exec head -${test_size} $corpus/train.${lang1} \> $corpus/test.${lang1}
 #show_exec head -${test_size} $corpus/train.${lang2} \> $corpus/test.${lang2}
 
-show_exec head -${test_size} ${src1} \> $corpus/test.${lang1}
-show_exec head -${test_size} ${src2} \> $corpus/test.${lang2}
+#show_exec head -${test_size} ${src1} \> $corpus/test.${lang1}
+#show_exec head -${test_size} ${src2} \> $corpus/test.${lang2}
+
+offset=$(expr $train_size + 1)
+show_exec tail -n +${offset} ${src1} \| head -n ${test_size} \> $corpus/test.${lang1}
+show_exec tail -n +${offset} ${src2} \| head -n ${test_size} \> $corpus/test.${lang2}
 
 #show_exec tail -n +${test_size} ${src1} \> $corpus/train.${lang1}
 #show_exec tail -n +${test_size} ${src2} \> $corpus/train.${lang2}
 
-show_exec head -${dev_size} ${src1} \> $corpus/dev.${lang1}
-show_exec head -${dev_size} ${src2} \> $corpus/dev.${lang2}
+#show_exec head -${dev_size} ${src1} \> $corpus/dev.${lang1}
+#show_exec head -${dev_size} ${src2} \> $corpus/dev.${lang2}
+
+offset=$(expr $offset + $test_size)
+show_exec tail -n +${offset} ${src1} \| head -n ${dev_size} \> ${corpus}/dev.${lang1}
+show_exec tail -n +${offset} ${src2} \| head -n ${dev_size} \> ${corpus}/dev.${lang2}
 
 tokenize ${lang1} train
 tokenize ${lang2} train
