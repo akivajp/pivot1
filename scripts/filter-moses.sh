@@ -1,15 +1,15 @@
 #!/bin/bash
 
-TRAVATAR=$HOME/exp/travatar
+MOSES=$HOME/exp/moses
+BIN=$HOME/usr/local/bin
 
 dir=$(cd $(dirname $0); pwd)
 
-NBEST=200
 THREADS=10
 
 usage()
 {
-  echo "usage: $0 corpus1 corpus2 path/to/travatar.ini task_dir"
+  echo "usage: $0 task test_input"
 }
 
 show_exec()
@@ -53,19 +53,17 @@ proc_args()
 
 proc_args $*
 
-if [ ${#ARGS[@]} -lt 4 ]
+if [ ${#ARGS[@]} -lt 1 ]
 then
   usage
   exit 1
 fi
 
-src1=${ARGS[0]}
-src2=${ARGS[1]}
-moses_ini=${ARGS[2]}
-task=${ARGS[3]}
+task=${ARGS[0]}
+src=${ARGS[1]}
 
 workdir="${task}/working"
-#show_exec mkdir -p ${workdir}
-#show_exec cd ${workdir}
-show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${moses_ini} -nbest ${NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} --working-dir ${workdir} -threads ${THREADS} -eval bleu \> ${task}/tune.log
+show_exec mkdir -p ${workdir}
+show_exec cd ${workdir}
+show_exec ${MOSES}/scripts/training/filter-model-given-input.pl filtered mert-work/moses.ini ${src} -Binarizer ${BIN}/processPhraseTable
 

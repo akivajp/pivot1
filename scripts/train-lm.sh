@@ -1,7 +1,9 @@
 #!/bin/bash
 
-MOSES=/home/is/akiba-mi/exp/moses
-IRSTLM=~/exp/irstlm
+#MOSES=/home/is/akiba-mi/exp/moses
+#IRSTLM=~/exp/irstlm
+#LMPLZ=$HOME/usr/local/bin/lmplz
+BIN=$HOME/usr/local/bin
 
 dir=$(cd $(dirname $0); pwd)
 
@@ -69,8 +71,12 @@ else
   langdir=LM_${lang}
 fi
 show_exec mkdir -p $langdir
-show_exec $IRSTLM/bin/add-start-end.sh \< ${src} \> ${langdir}/train.sb.${lang}
-show_exec $IRSTLM/bin/build-lm.sh -i ${langdir}/train.sb.${lang} -p -s improved-kneser-ney -o ${langdir}/train.lm.${lang}
-show_exec $IRSTLM/bin/compile-lm --text ${langdir}/train.lm.${lang}.gz ${langdir}/train.arpa.${lang}
-show_exec $MOSES/bin/build_binary ${langdir}/train.arpa.${lang} ${langdir}/train.blm.${lang}
+#show_exec $IRSTLM/bin/add-start-end.sh \< ${src} \> ${langdir}/train.sb.${lang}
+#show_exec $IRSTLM/bin/build-lm.sh -i ${langdir}/train.sb.${lang} -p -s improved-kneser-ney -o ${langdir}/train.lm.${lang}
+#show_exec $IRSTLM/bin/compile-lm --text ${langdir}/train.lm.${lang}.gz ${langdir}/train.arpa.${lang}
+
+show_exec ${BIN}/lmplz -o 5 \< ${src} \> ${langdir}/train.arpa.${lang}
+
+# -- BINARISING --
+show_exec ${BIN}/build_binary -i ${langdir}/train.arpa.${lang} ${langdir}/train.blm.${lang}
 

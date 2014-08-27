@@ -117,23 +117,31 @@ show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $
 workdir="${task}/working"
 orig=$PWD
 
-# -- BINARISING --
-bindir=${workdir}/binmodel
-show_exec mkdir -p ${bindir}
-show_exec ${BIN}/processPhraseTable -ttable 0 0 ${transdir}/model/phrase-table.gz -nscores 5 -out ${bindir}/phrase-table
-show_exec ${BIN}/processLexicalTable -in ${transdir}/model/reordering-table.wbe-msd-bidirectional-fe.gz -out ${bindir}/reordering-table
-
 # -- TUNING --
 if [ $opt_tuning ]; then
   show_exec ${dir}/tune-moses.sh ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} ${orig}/${transdir}/model/moses.ini ${task}
+
+  # -- BINARIZING --
+  bindir=${task}/binmodel
+  show_exec mkdir -p ${bindir}
+  show_exec ${BIN}/processPhraseTable -ttable 0 0 ${transdir}/model/phrase-table.gz -nscores 5 -out ${bindir}/phrase-table
+  show_exec ${BIN}/processLexicalTable -in ${transdir}/model/reordering-table.wbe-msd-bidirectional-fe.gz -out ${bindir}/reordering-table
+  show_exec sed -e "s/PhraseDictionaryMemory/PhraseDictionaryBinary/" -e "s#${transdir}/model/phrase-table\.gz#${bindir}/phrase-table#" -e "s#${transdir}/model/reordering-table\.wbe-msd-bidirectional-fe\.gz#${bindir}/reordering-table#" ${workdir}/mert-work/moses.ini \> ${bindir}/moses.ini
+
 fi
 
 # -- TESTING --
 if [ $opt_test ]; then
+  # -- TESTING PRAIN --
   show_exec ${dir}/test-moses.sh ${task} ${transdir}/model/moses.ini \> ${workdir}/score1
 
   if [ $opt_tuning ]; then
-    show_exec ${dir}/test-moses.sh ${task} ${workdir}/mert-work/moses.ini \> ${workdir}/score2
+    # -- TESTING BINARISED --
+    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini \> ${workdir}/score2
+
+    # -- FILTERING AND TESTING --
+#    show_exec ${dir}/filter-moses.sh ${task} ${orig}/${corpus}/test.true.${lang1}
+#    show_exec ${dir}/test-moses.sh ${task} ${workdir}/filtered/moses.ini \> ${workdir}/score2
   fi
 fi
 

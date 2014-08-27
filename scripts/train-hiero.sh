@@ -8,6 +8,8 @@ GIZA=~/usr/local/bin
 TRAVATAR=$HOME/exp/travatar
 BIN=$HOME/usr/local/bin
 
+THREADS=10
+
 dir=$(cd $(dirname $0); pwd)
 
 echo "running script with PID: $$"
@@ -111,7 +113,7 @@ langdir="${task}/LM_${lang2}"
 transdir="${task}/TM"
 workdir="${task}/working"
 
-show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${transdir} -src_file ${corpus}/train.clean.${lang1} -trg_file ${corpus}/train.clean.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${langdir}/train.blm.${lang2}
+show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${transdir} -src_file ${corpus}/train.clean.${lang1} -trg_file ${corpus}/train.clean.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${langdir}/train.blm.${lang2} -threads ${THREADS}
 
 orig=$PWD
 

@@ -4,6 +4,8 @@ TRAVATAR=$HOME/exp/travatar
 BIN=$HOME/usr/local/bin
 dir=$(cd $(dirname $0); pwd)
 
+THREADS=10
+
 usage()
 {
   echo "usage: $0 task path/to/travatar.ini"
@@ -70,6 +72,6 @@ corpus="${task}/corpus"
 
 show_exec mkdir -p ${workdir}
 show_exec ${TRAVATAR}/script/train/filter-model.pl ${travatar_ini} ${workdir}/filtered-test.ini ${workdir}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${corpus}/test.true.${lang1}\"
-show_exec ${BIN}/travatar -config_file ${workdir}/filtered-test.ini \< ${corpus}/test.true.${lang1} \> ${workdir}/translated.out
+show_exec ${BIN}/travatar -config_file ${workdir}/filtered-test.ini -threads ${THREADS} \< ${corpus}/test.true.${lang1} \> ${workdir}/translated.out
 show_exec ${BIN}/mt-evaluator -ref ${corpus}/test.true.${lang2} ${workdir}/translated.out
 

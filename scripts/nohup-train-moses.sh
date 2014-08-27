@@ -1,10 +1,11 @@
 #!/bin/bash
 
 dir=$(cd $(dirname $0); pwd)
-output="nohup_moses_$1-$3.out"
+task="moses_$1-$3"
+output="nohup_${task}.out"
 now=$(date +"%Y/%m/%d %H:%M:%S")
 
 nohup nice time "$dir/train-moses.sh" $* > ${output} &
-echo "NOHUP_PID: $!, TASK: moses_$1-$3, Date: ${now}, Host: ${HOSTNAME}, Args: $*" >> running.pid
+echo "TASK: ${task}, Date: ${now}, Host: ${HOSTNAME}, NOHUP_PID: $!, Args: $*" >> running.pid
 tail -f $output
 
