@@ -89,6 +89,7 @@ else
   task="hiero_${lang1}-${lang2}"
 fi
 
+# -- CORPUS FORMATTING --
 options=""
 if [ $opt_train_size ]
 then
@@ -103,10 +104,19 @@ then
   options="$options --dev_size=${opt_dev_size}"
 fi
 options="$options --task_name=${task}"
-show_exec "${dir}/format-corpus.sh" ${lang1} ${src1} ${lang2} ${src2} ${options}
+if [ $opt_skip_format ]; then
+  echo [skip] corpus format
+else
+  show_exec "${dir}/format-corpus.sh" ${lang1} ${src1} ${lang2} ${src2} ${options}
+fi
 
+# -- LANGUAGER MODELING --
 corpus="${task}/corpus"
-show_exec "${dir}/train-lm.sh" ${lang2} ${corpus}/train.true.${lang2} --task_name=${task}
+if [ $opt_skip_lm ]; then
+  echo [skip] language modeling
+else
+  show_exec "${dir}/train-lm.sh" ${lang2} ${corpus}/train.true.${lang2} --task_name=${task}
+fi
 
 langdir="${task}/LM_${lang2}"
 
