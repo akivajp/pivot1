@@ -23,6 +23,9 @@ usage()
   echo "  --test_size={int}"
   echo "  --dev_size={int}"
   echo "  --task_name={string}"
+  echo "  --skip_format"
+  echo "  --skip_lm"
+  echo "  --skip_train"
   echo "  --tuning"
   echo "  --test"
 }
@@ -123,7 +126,11 @@ langdir="${task}/LM_${lang2}"
 transdir="${task}/TM"
 workdir="${task}/working"
 
-show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${transdir} -src_file ${corpus}/train.clean.${lang1} -trg_file ${corpus}/train.clean.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${langdir}/train.blm.${lang2} -threads ${THREADS}
+if [ $opt_skip_train ]; then
+  echo [skip] translation model
+else
+  show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${transdir} -src_file ${corpus}/train.clean.${lang1} -trg_file ${corpus}/train.clean.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${langdir}/train.blm.${lang2} -threads ${THREADS}
+fi
 
 orig=$PWD
 
@@ -135,7 +142,7 @@ if [ $opt_test ]; then
   show_exec ${dir}/test-travatar.sh ${task} ${transdir}/model/travatar.ini \> ${workdir}/score1
 
   if [ $opt_tuning ]; then
-    show_exec ${dir}/test-travatar.sh ${task} ${workdir}/travatar.ini \> ${workdir}/score2
+    show_exec ${dir}/test-travatar.sh ${task} ${workdir}/mert-work/travatar.ini \> ${workdir}/score2
   fi
 fi
 

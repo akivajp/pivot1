@@ -5,7 +5,8 @@ BIN=$HOME/usr/local/bin
 
 dir=$(cd $(dirname $0); pwd)
 
-THREADS=10
+#THREADS=10
+THREADS=4
 
 usage()
 {

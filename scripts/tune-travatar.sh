@@ -65,7 +65,7 @@ moses_ini=${ARGS[2]}
 task=${ARGS[3]}
 
 workdir="${task}/working"
-#show_exec mkdir -p ${workdir}
+show_exec mkdir -p ${workdir}
 #show_exec cd ${workdir}
-show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${moses_ini} -nbest ${NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} --working-dir ${workdir} -threads ${THREADS} -eval bleu \> ${task}/tune.log
+show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${moses_ini} -nbest ${NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} --working-dir ${workdir}/mert-work -threads ${THREADS} -eval bleu \> ${task}/tune.log
 

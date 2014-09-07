@@ -8,7 +8,8 @@ KYTEA=$BIN/kytea
 IRSTLM=~/exp/irstlm
 GIZA=~/usr/local/bin
 
-THREADS=10
+#THREADS=10
+THREADS=4
 
 dir=$(cd $(dirname $0); pwd)
 
@@ -121,8 +122,12 @@ fi
 # -- TRAINING --
 langdir="${task}/LM_${lang2}"
 transdir="${task}/TM"
-#show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering msd-bidirectional-fe -lm 0:3:$(pwd)/$langdir/train.blm.${lang2}:8 -external-bin-dir $GIZA -cores 4 \> ${task}/training.out
-show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering msd-bidirectional-fe -lm 0:3:$(pwd)/$langdir/train.blm.${lang2}:8 -external-bin-dir $GIZA -cores ${THREADS} \> ${task}/training.out
+if [ $opt_skip_train ]; then
+  echo [skip] translation model
+else
+  #show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering msd-bidirectional-fe -lm 0:3:$(pwd)/$langdir/train.blm.${lang2}:8 -external-bin-dir $GIZA -cores 4 \> ${task}/training.out
+  show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering msd-bidirectional-fe -lm 0:3:$(pwd)/$langdir/train.blm.${lang2}:8 -external-bin-dir $GIZA -cores ${THREADS} \> ${task}/training.out
+fi
 
 workdir="${task}/working"
 orig=$PWD
@@ -142,10 +147,11 @@ fi
 
 # -- TESTING --
 if [ $opt_test ]; then
+  show_exec mkdir -p $workdir
   # -- TESTING PRAIN --
   show_exec ${dir}/test-moses.sh ${task} ${transdir}/model/moses.ini \> ${workdir}/score1
 
-  if [ $opt_tuning ]; then
+  if [ -f ${bindir}/moses.ini ]; then
     # -- TESTING BINARISED --
     show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini \> ${workdir}/score2
 

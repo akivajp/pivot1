@@ -1,10 +1,12 @@
 #!/bin/bash
 
+MOSES=$HOME/exp/moses
 TRAVATAR=$HOME/exp/travatar
 BIN=$HOME/usr/local/bin
 dir=$(cd $(dirname $0); pwd)
 
-THREADS=10
+#THREADS=10
+THREADS=4
 
 usage()
 {
@@ -74,4 +76,5 @@ show_exec mkdir -p ${workdir}
 show_exec ${TRAVATAR}/script/train/filter-model.pl ${travatar_ini} ${workdir}/filtered-test.ini ${workdir}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${corpus}/test.true.${lang1}\"
 show_exec ${BIN}/travatar -config_file ${workdir}/filtered-test.ini -threads ${THREADS} \< ${corpus}/test.true.${lang1} \> ${workdir}/translated.out
 show_exec ${BIN}/mt-evaluator -ref ${corpus}/test.true.${lang2} ${workdir}/translated.out
+#show_exec ${MOSES}/scripts/generic/multi-bleu.perl -lc ${corpus}/test.true.${lang2} \< ${workdir}/translated.out
 
