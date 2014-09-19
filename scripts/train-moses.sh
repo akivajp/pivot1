@@ -11,6 +11,8 @@ GIZA=~/usr/local/bin
 #THREADS=10
 THREADS=4
 
+ORDER=5
+
 dir=$(cd $(dirname $0); pwd)
 
 echo "running script with PID: $$"
@@ -24,6 +26,9 @@ usage()
   echo "  --test_size={int}"
   echo "  --dev_size={int}"
   echo "  --task_name={string}"
+  echo "  --skip_format"
+  echo "  --skip_lm"
+  echo "  --skip_train"
   echo "  --tuning"
   echo "  --test"
 }
@@ -125,22 +130,22 @@ transdir="${task}/TM"
 if [ $opt_skip_train ]; then
   echo [skip] translation model
 else
-  #show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering msd-bidirectional-fe -lm 0:3:$(pwd)/$langdir/train.blm.${lang2}:8 -external-bin-dir $GIZA -cores 4 \> ${task}/training.out
-  show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering msd-bidirectional-fe -lm 0:3:$(pwd)/$langdir/train.blm.${lang2}:8 -external-bin-dir $GIZA -cores ${THREADS} \> ${task}/training.out
+#  show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering msd-bidirectional-fe -lm 0:${ORDER}:$(pwd)/$langdir/train.blm.${lang2}:8 -external-bin-dir $GIZA -cores ${THREADS} \> ${task}/training.out
+  show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering distance -lm 0:${ORDER}:$(pwd)/$langdir/train.blm.${lang2}:8 -external-bin-dir $GIZA -cores ${THREADS} \> ${task}/training.out
 fi
 
 workdir="${task}/working"
 orig=$PWD
 
+bindir=${task}/binmodel
 # -- TUNING --
 if [ $opt_tuning ]; then
   show_exec ${dir}/tune-moses.sh ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} ${orig}/${transdir}/model/moses.ini ${task}
 
   # -- BINARIZING --
-  bindir=${task}/binmodel
   show_exec mkdir -p ${bindir}
   show_exec ${BIN}/processPhraseTable -ttable 0 0 ${transdir}/model/phrase-table.gz -nscores 5 -out ${bindir}/phrase-table
-  show_exec ${BIN}/processLexicalTable -in ${transdir}/model/reordering-table.wbe-msd-bidirectional-fe.gz -out ${bindir}/reordering-table
+  #show_exec ${BIN}/processLexicalTable -in ${transdir}/model/reordering-table.wbe-msd-bidirectional-fe.gz -out ${bindir}/reordering-table
   show_exec sed -e "s/PhraseDictionaryMemory/PhraseDictionaryBinary/" -e "s#${transdir}/model/phrase-table\.gz#${bindir}/phrase-table#" -e "s#${transdir}/model/reordering-table\.wbe-msd-bidirectional-fe\.gz#${bindir}/reordering-table#" ${workdir}/mert-work/moses.ini \> ${bindir}/moses.ini
 
 fi
@@ -149,11 +154,11 @@ fi
 if [ $opt_test ]; then
   show_exec mkdir -p $workdir
   # -- TESTING PRAIN --
-  show_exec ${dir}/test-moses.sh ${task} ${transdir}/model/moses.ini \> ${workdir}/score1
+  show_exec ${dir}/test-moses.sh ${task} ${transdir}/model/moses.ini ${workdir}/score1
 
   if [ -f ${bindir}/moses.ini ]; then
     # -- TESTING BINARISED --
-    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini \> ${workdir}/score2
+    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${workdir}/score2
 
     # -- FILTERING AND TESTING --
 #    show_exec ${dir}/filter-moses.sh ${task} ${orig}/${corpus}/test.true.${lang1}

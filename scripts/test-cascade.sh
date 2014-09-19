@@ -87,7 +87,7 @@ echo LANG3: $lang3
 echo INI1: $ini1
 echo INI2: $ini2
 
-workdir="${method1}_${lang1}-${lang2}-${lang3}"
+workdir="cascade_${method1}_${lang1}-${lang2}-${lang3}"
 
 target1=${workdir}/translated.${lang2}
 show_exec mkdir -p ${workdir}
@@ -106,5 +106,5 @@ elif [ "$method1" == "hiero" ]; then
   show_exec ${BIN}/travatar -config_file ${workdir}/${task2}/filtered-test.ini -threads ${THREADS} \< ${target1} \> ${target2}
 fi
 
-show_exec ${BIN}/mt-evaluator -ref ${ref} ${target2}
+show_exec ${BIN}/mt-evaluator -ref ${ref} ${target2} \> ${workdir}/score.out
 

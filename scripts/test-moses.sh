@@ -1,12 +1,14 @@
 #!/bin/bash
 
 MOSES=$HOME/exp/moses
+TRAVATAR=$HOME/exp/travatar
 dir=$(cd $(dirname $0); pwd)
+BIN=$HOME/usr/local/bin
 THREADS=4
 
 usage()
 {
-  echo "usage: $0 task path/to/moses.ini"
+  echo "usage: $0 task path/to/moses.ini [output]"
 }
 
 show_exec()
@@ -58,6 +60,7 @@ fi
 
 task=${ARGS[0]}
 moses_ini=${ARGS[1]}
+output=${ARGS[2]}
 
 trans=${task#./}
 trans=${trans%/}
@@ -70,5 +73,11 @@ corpus="${task}/corpus"
 
 show_exec mkdir -p ${workdir}
 show_exec ${MOSES}/bin/moses -f ${moses_ini} -threads ${THREADS} \< ${corpus}/test.true.${lang1} \> ${workdir}/translated.out
-show_exec ${MOSES}/scripts/generic/multi-bleu.perl -lc ${corpus}/test.true.${lang2} \< ${workdir}/translated.out
+if [ "$output" ]; then
+  #show_exec ${MOSES}/scripts/generic/multi-bleu.perl -lc ${corpus}/test.true.${lang2} \< ${workdir}/translated.out \> ${output}
+  show_exec ${BIN}/mt-evaluator -ref ${corpus}/test.true.${lang2} ${workdir}/translated.out \> ${output}
+else
+  #show_exec ${MOSES}/scripts/generic/multi-bleu.perl -lc ${corpus}/test.true.${lang2} \< ${workdir}/translated.out
+  show_exec ${BIN}/mt-evaluator -ref ${corpus}/test.true.${lang2} ${workdir}/translated.out
+fi
 

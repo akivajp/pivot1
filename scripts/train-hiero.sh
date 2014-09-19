@@ -8,7 +8,8 @@ GIZA=~/usr/local/bin
 TRAVATAR=$HOME/exp/travatar
 BIN=$HOME/usr/local/bin
 
-THREADS=10
+#THREADS=10
+THREADS=4
 
 dir=$(cd $(dirname $0); pwd)
 
@@ -141,7 +142,7 @@ fi
 if [ $opt_test ]; then
   show_exec ${dir}/test-travatar.sh ${task} ${transdir}/model/travatar.ini \> ${workdir}/score1
 
-  if [ $opt_tuning ]; then
+  if [ -f ${workdir}/mert-work/travatar.ini ]; then
     show_exec ${dir}/test-travatar.sh ${task} ${workdir}/mert-work/travatar.ini \> ${workdir}/score2
   fi
 fi

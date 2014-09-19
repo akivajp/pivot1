@@ -7,6 +7,8 @@ BIN=$HOME/usr/local/bin
 
 dir=$(cd $(dirname $0); pwd)
 
+ORDER=5
+
 usage()
 {
   echo "usage: $0 lang_id src_corpus"
@@ -75,7 +77,7 @@ show_exec mkdir -p $langdir
 #show_exec $IRSTLM/bin/build-lm.sh -i ${langdir}/train.sb.${lang} -p -s improved-kneser-ney -o ${langdir}/train.lm.${lang}
 #show_exec $IRSTLM/bin/compile-lm --text ${langdir}/train.lm.${lang}.gz ${langdir}/train.arpa.${lang}
 
-show_exec ${BIN}/lmplz -o 5 \< ${src} \> ${langdir}/train.arpa.${lang}
+show_exec ${BIN}/lmplz -o ${ORDER} \< ${src} \> ${langdir}/train.arpa.${lang}
 
 # -- BINARISING --
 show_exec ${BIN}/build_binary -i ${langdir}/train.arpa.${lang} ${langdir}/train.blm.${lang}

@@ -75,9 +75,10 @@ tokenize()
   src=${corpus}/${prefix}.${lang}
   output=${corpus}/${prefix}.tok.${lang}
 
-  if [ $lang = "zh" ]
-  then
+  if [ $lang = "zh" ]; then
     show_exec $KYTEA -notags -model $KYTEA_ZH_DIC \< ${src} \> ${output}
+  elif [ $lang = "ja" ]; then
+    show_exec $KYTEA -notags \< ${src} \> ${output}
   else
     show_exec ~/exp/moses/scripts/tokenizer/tokenizer.perl -l $lang \< $src \> ${output}
   fi
