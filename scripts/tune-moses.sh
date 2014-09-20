@@ -52,6 +52,11 @@ proc_args()
   done
 }
 
+abspath()
+{
+  echo $(cd $(dirname $1) && pwd)/$(basename $1)
+}
+
 proc_args $*
 
 if [ ${#ARGS[@]} -lt 4 ]
@@ -60,9 +65,9 @@ then
   exit 1
 fi
 
-src1=${ARGS[0]}
-src2=${ARGS[1]}
-moses_ini=${ARGS[2]}
+src1=$(abspath ${ARGS[0]})
+src2=$(abspath ${ARGS[1]})
+moses_ini=$(abspath ${ARGS[2]})
 task=${ARGS[3]}
 
 workdir="${task}/working"

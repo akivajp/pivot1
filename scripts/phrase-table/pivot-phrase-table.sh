@@ -69,7 +69,10 @@ task1=${ARGS[0]}
 task2=${ARGS[1]}
 workdir=${ARGS[2]}
 
+trans1=${task1#*_}
+trans2=${task2#*_}
+
 show_exec mkdir -p ${workdir}
-show_exec ${dir}/convert2sqlite.py ${task1}/TM/model/phrase-table.gz ${workdir}/phrase-table.db phrase1
-show_exec ${dir}/convert2sqlite.py ${task2}/TM/model/phrase-table.gz ${workdir}/phrase-table.db phrase2
+show_exec ${dir}/convert2sqlite.py ${task1}/TM/model/phrase-table.gz ${workdir}/phrase-tables.db phrase1
+show_exec ${dir}/convert2sqlite.py ${task2}/TM/model/phrase-table.gz ${workdir}/phrase-tables.db phrase2
 
