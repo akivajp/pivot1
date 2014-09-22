@@ -9,7 +9,7 @@ THREADS=10
 
 usage()
 {
-  echo "usage: $0 task test_input"
+  echo "usage: $0 path/to/moses.ini test_input outdir"
 }
 
 show_exec()
@@ -53,17 +53,16 @@ proc_args()
 
 proc_args $*
 
-if [ ${#ARGS[@]} -lt 1 ]
+if [ ${#ARGS[@]} -lt 3 ]
 then
   usage
   exit 1
 fi
 
-task=${ARGS[0]}
-src=${ARGS[1]}
+moses_ini=${ARGS[0]}
+text=${ARGS[1]}
+outdir=${ARGS[2]}
 
-workdir="${task}/working"
-show_exec mkdir -p ${workdir}
-show_exec cd ${workdir}
-show_exec ${MOSES}/scripts/training/filter-model-given-input.pl filtered mert-work/moses.ini ${src} -Binarizer ${BIN}/processPhraseTable
+#show_exec mkdir -p ${outdir}
+show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${outdir} ${moses_ini} ${text} -Binarizer ${BIN}/processPhraseTable
 

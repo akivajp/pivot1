@@ -140,10 +140,10 @@ if [ $opt_tuning ]; then
 fi
 
 if [ $opt_test ]; then
-  show_exec ${dir}/test-travatar.sh ${task} ${transdir}/model/travatar.ini \> ${workdir}/score1
+  show_exec ${dir}/test-travatar.sh ${task} ${transdir}/model/travatar.ini ${workdir}/score1
 
   if [ -f ${workdir}/mert-work/travatar.ini ]; then
-    show_exec ${dir}/test-travatar.sh ${task} ${workdir}/mert-work/travatar.ini \> ${workdir}/score2
+    show_exec ${dir}/test-travatar.sh ${task} ${workdir}/mert-work/travatar.ini ${workdir}/score2
   fi
 fi
 

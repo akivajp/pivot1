@@ -167,7 +167,7 @@ def pivot(dbfile, table1, table2, savefile):
     # アラインメントのマージ
     merge_alignment(record, align1, align2)
   # 最後の書き出し
-  progress.print("finished pivoting %(count)d records'" % locals())
+  progress.print("finished pivoting %(count)d records" % locals())
   print()
   write_records(savefile, curr_phrase, pivot_records)
 

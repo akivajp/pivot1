@@ -5,13 +5,9 @@ THREADS=4
 
 dir=$(cd $(dirname $0); pwd)
 
-echo "running script $0 with PID: $$"
-
 usage()
 {
   echo "usage: $0 task1 task2 work_dir"
-  echo ""
-  echo "options:"
 }
 
 show_exec()
@@ -75,4 +71,6 @@ trans2=${task2#*_}
 show_exec mkdir -p ${workdir}
 show_exec ${dir}/convert2sqlite.py ${task1}/TM/model/phrase-table.gz ${workdir}/phrase-tables.db phrase1
 show_exec ${dir}/convert2sqlite.py ${task2}/TM/model/phrase-table.gz ${workdir}/phrase-tables.db phrase2
+show_exec ${dir}/triangulate.py ${workdir}/phrase-tables.db phrase1 phrase2 ${workdir}/pivot.txt
+show_exec sort ${workdir}/pivot.txt \| gzip \> ${workdir}/phrase-table.gz
 

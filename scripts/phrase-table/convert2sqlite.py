@@ -2,9 +2,13 @@
 # encoding: utf-8
 
 import gzip
+import re
 import sqlite3
 import sys
+
+# local libraries
 import debug
+import progress
 
 def usage():
   print("usage: %s path1/to/phrase-table.gz dbfile table_name" % sys.argv[0])
@@ -44,16 +48,19 @@ def make_indices(db, table_name):
   db.execute('CREATE UNIQUE INDEX %(table_name)s_both ON %(table_name)s(source, target)' % locals() )
 
 def insert_record(db, table_name, source, target, scores, align, counts):
-  db.execute('''
+  #source = re.escape(source)
+  #target = re.escape(target)
+  sql = '''
     INSERT INTO %(table_name)s VALUES (
       null,
-      "%(source)s",
-      "%(target)s",
+      ?,
+      ?,
       "%(scores)s",
       "%(align)s",
       "%(counts)s"
     );
-  ''' % locals() )
+  ''' % locals()
+  db.execute(sql, (source, target) )
 
 def convert(table_path, dbfile, table_name):
   f_in = gzip.open(table_path, 'r')
@@ -75,11 +82,12 @@ def convert(table_path, dbfile, table_name):
     align  = fields[3].strip()
     counts = fields[4].strip()
     insert_record(db, table_name, source, target, scores, align, counts)
-    if n % 1000 == 0:
+#    if n % 1000 == 0:
+    if n % 10000 == 0:
       ratio = f_in.tell() * 100.0 / size
-      sys.stdout.write("\rloading (%(ratio)3.2f%%): %(n)d records" % locals())
-      sys.stdout.flush()
-  print("\rloaded (100%%): %d records" % n )
+      progress.print("loaded (%(ratio)3.2f%%): %(n)d records, last phrase: '%(source)s'" % locals())
+  progress.print("loaded (100%%): %(n)d records" % locals() )
+  print()
   db.commit()
   db.close()
 

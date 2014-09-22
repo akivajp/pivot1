@@ -62,6 +62,8 @@ fi
 
 task1=${ARGS[0]}
 task2=${ARGS[1]}
+taskname1=$(basename $task1)
+taskname2=$(basename $task2)
 text=${ARGS[2]}
 ref=${ARGS[3]}
 method1=${task1%_*}
@@ -94,16 +96,16 @@ show_exec mkdir -p ${workdir}
 if [ "$method1" == "moses" ]; then
   show_exec ${MOSES}/bin/moses -f ${ini1} -threads ${THREADS} \< ${text} \> ${target1}
 elif [ "$method1" == "hiero" ]; then
-  show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini1} ${workdir}/${task1}/filtered-test.ini ${workdir}/${task1}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${text}\"
-  show_exec ${BIN}/travatar -config_file ${workdir}/${task1}/filtered-test.ini -threads ${THREADS} \< ${text} \> ${target1}
+  show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini1} ${workdir}/${taskname1}/filtered-test.ini ${workdir}/${taskname1}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${text}\"
+  show_exec ${BIN}/travatar -config_file ${workdir}/${taskname1}/filtered-test.ini -threads ${THREADS} \< ${text} \> ${target1}
 fi
 
 target2=${workdir}/translated.${lang3}
 if [ "$method2" == "moses" ]; then
   show_exec ${MOSES}/bin/moses -f ${ini2} -threads ${THREADS} \< ${target1} \> ${target2}
 elif [ "$method1" == "hiero" ]; then
-  show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini2} ${workdir}/${task2}/filtered-test.ini ${workdir}/${task2}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${target1}\"
-  show_exec ${BIN}/travatar -config_file ${workdir}/${task2}/filtered-test.ini -threads ${THREADS} \< ${target1} \> ${target2}
+  show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini2} ${workdir}/${taskname2}/filtered-test.ini ${workdir}/${taskname2}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${target1}\"
+  show_exec ${BIN}/travatar -config_file ${workdir}/${taskname2}/filtered-test.ini -threads ${THREADS} \< ${target1} \> ${target2}
 fi
 
 show_exec ${BIN}/mt-evaluator -ref ${ref} ${target2} \> ${workdir}/score.out

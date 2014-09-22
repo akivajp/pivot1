@@ -135,12 +135,11 @@ else
 fi
 
 workdir="${task}/working"
-orig=$PWD
 
 bindir=${task}/binmodel
 # -- TUNING --
 if [ $opt_tuning ]; then
-  show_exec ${dir}/tune-moses.sh ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} ${orig}/${transdir}/model/moses.ini ${task}
+  show_exec ${dir}/tune-moses.sh ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang2} ${transdir}/model/moses.ini ${task}
 
   # -- BINARIZING --
   show_exec mkdir -p ${bindir}
@@ -154,15 +153,13 @@ fi
 if [ $opt_test ]; then
   show_exec mkdir -p $workdir
   # -- TESTING PRAIN --
-  show_exec ${dir}/test-moses.sh ${task} ${transdir}/model/moses.ini ${workdir}/score1
+  show_exec rm -rf ${workdir}/tmp
+  show_exec ${dir}/filter-moses.sh ${transdir}/model/moses.ini ${corpus}/test.true.${lang1} ${workdir}/tmp/filtered
+  show_exec ${dir}/test-moses.sh ${task} ${workdir}/tmp/filtered/moses.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang2} ${workdir}/score1.out
 
   if [ -f ${bindir}/moses.ini ]; then
     # -- TESTING BINARISED --
-    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${workdir}/score2
-
-    # -- FILTERING AND TESTING --
-#    show_exec ${dir}/filter-moses.sh ${task} ${orig}/${corpus}/test.true.${lang1}
-#    show_exec ${dir}/test-moses.sh ${task} ${workdir}/filtered/moses.ini \> ${workdir}/score2
+    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang2} ${workdir}/score2.out
   fi
 fi
 
