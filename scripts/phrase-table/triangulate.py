@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 # encoding: utf-8
 
+import argparse
 import gzip
+import multiprocessing
 import os
-import progress
 import re
 import sqlite3
 import sys
+import time
 
+# local libs
 import debug
+import progress
+
+IGNORE = 1e-3
 
 def usage():
   print("usage: %s dbfile table1 table2 dest-phrase-table" % sys.argv[0])
@@ -31,29 +37,10 @@ def create_table(db, table_name):
     )
   ''' % locals() )
 
-def make_indices(db, table_name):
+def create_indices(db, table_name):
   db.execute('CREATE INDEX %(table_name)s_source ON %(table_name)s(source)' % locals() )
   db.execute('CREATE INDEX %(table_name)s_target ON %(table_name)s(target)' % locals() )
   db.execute('CREATE UNIQUE INDEX %(table_name)s_both ON %(table_name)s(source, target)' % locals() )
-
-def insert_record(db, table_name, source, target, scores, align, counts):
-  db.execute('''
-    INSERT INTO %(table_name)s VALUES (
-      null,
-      "%(source)s",
-      "%(target)s",
-      "%(scores)s",
-      "%(align)s",
-      "%(counts)s"
-    );
-  ''' % locals() )
-
-def get_pivot_count(db, table1, table2):
-  cur = db.execute('''
-    SELECT COUNT(*) FROM %(table1)s INNER JOIN %(table2)s ON %(table1)s.target = %(table2)s.source
-  ''' % locals() )
-  row = cur.fetchone()
-  return row[0]
 
 def select_pivot(db, table1, table2):
   return db.execute('''
@@ -80,6 +67,32 @@ def write_records(savefile, source, records):
     else:
       f_out.write(rec)
   f_out.close()
+
+
+def insert_records(db, table_name, records):
+  for (source, target), record in records.items():
+    scores = str.join(' ', map(str, record[0]) )
+    align  = str.join(' ', sorted(record[1].keys()) )
+    # 出現頻度の推定も行いたいが非常に困難
+    counts = None
+    #if True or target == '、':
+    #  print("inserting source: '%(source)s', target: '%(target)s'" % locals())
+    try:
+      db.execute('''
+        INSERT INTO %(table_name)s VALUES (
+          null,
+          "%(source)s",
+          "%(target)s",
+          "%(scores)s",
+          "%(align)s",
+          null
+        );
+      ''' % locals() )
+    except:
+      print("ERROR source: '%(source)s', target: '%(target)s'" % locals())
+      sys.exit(3)
+  #db.commit()
+
 
 # スコアを掛けあわせて累積値に加算する
 def add_scores(record, scores1, scores2):
@@ -113,71 +126,192 @@ def merge_alignment(record, align1, align2):
 #    debug.print(a1, a2)
 #    debug.print(align)
 
-def gcd(a, b):
-  if a > b:
-    return gcd(b, a)
-  if b % a == 0:
-    return a
-  else:
-    return gcd(b % a, a)
+def empty_all(queues):
+  for q in queues:
+    #debug.print(q, q.empty())
+    if not q.empty():
+      return False
+  return True
 
-def pivot(dbfile, table1, table2, savefile):
-  if not os.path.isfile(dbfile):
+def get_empty_queue(queues):
+  for q in queues:
+    if q.empty():
+      return q
+  else:
+    return None
+
+class Counter:
+  def __init__(self):
+    self.row_count = 0
+    self.pivot_count = 0
+    self.threshold = 1
+    self.unit = 1
+
+  def add_row_count(self, count = 1):
+    self.row_count += count
+
+  def add_pivot_count(self, count):
+    self.pivot_count += count
+
+  def should_print(self):
+    '''プログレスを表示すべきかどうか
+
+    しきい値が増加単位の100倍を超えると、増加単位が10倍になる'''
+    if self.pivot_count < self.threshold:
+      return False
+    else:
+      if self.threshold >= self.unit * 100:
+        self.unit *= 10
+      self.threshold += self.unit
+      return True
+
+  def print(self, source = None):
+    if source:
+      if self.should_print():
+        progress.print("processing %d records, pivoted %d records, last phrase: '%s'" %
+                       (self.row_count, self.pivot_count, source))
+    else:
+      progress.print("processed %d records, pivoted %d records" % (self.row_count, self.pivot_count))
+      print()
+
+# ピボット対象のレコードの配列を record_queue で受け取り、処理したデータを pivot_queue で渡す
+def proc(record_queue, pivot_queue):
+  while True:
+    if not record_queue.empty():
+      # 処理すべきレコード配列を発見
+      rows = record_queue.get()
+      #debug.print(len(rows))
+
+      records = {}
+      source = ''
+      for row in rows:
+        #print(row)
+        source = row[0]
+        pivot_phrase = row[1] # 参考までに取得しているが使わない
+        target = row[2]
+        scores1 = [float(score) for score in row[3].split(' ')]
+        scores2 = [float(score) for score in row[4].split(' ')]
+        align1 = row[5].split(' ')
+        align2 = row[6].split(' ')
+        counts1 = [int(count) for count in row[7].split(' ')]
+        counts2 = [int(count) for count in row[8].split(' ')]
+        if not (source, target) in records:
+          # 対象言語の訳出のレコードがまだ無いので作る
+          records[(source, target)] = [ [0, 0, 0, 0], {}, [0, 0, 0] ]
+        record = records[(source, target)]
+        # 訳出のスコア(条件付き確率)を掛けあわせて加算する
+        add_scores(record, scores1, scores2)
+        # アラインメントのマージ
+        merge_alignment(record, align1, align2)
+      # 非常に小さな翻訳確率のフレーズは無視する
+      ignoring = []
+      for (source, target), rec in records.items():
+        if rec[0][0] < IGNORE and rec[0][2] < IGNORE:
+          #print("ignoring '%(source)s' -> '%(target)s' %(rec)s" % locals())
+          ignoring.append( (source, target) )
+        elif rec[0][0] < IGNORE ** 2 or rec[0][2] < IGNORE ** 2:
+          #print("ignoring '%(source)s' -> '%(target)s' %(rec)s" % locals())
+          ignoring.append( (source, target) )
+      for pair in ignoring:
+        del records[pair]
+      # 周辺化したレコードの配列を親プロセスに返す
+      if records:
+        #debug.print("finished pivoting, source phrase: '%(source)s'" % locals())
+        #debug.print(source, len(rows), len(records))
+        pivot_queue.put(records)
+
+
+def flush_pivot_records(db_save, pivot_name, count, pivot_queue):
+  #print("flushing pivot records: %d" % pivot_queue.qsize())
+  pivot_records = pivot_queue.get()
+  for pair in pivot_records.keys():
+    last = pair[0]
+    break
+  insert_records(db_save, pivot_name, pivot_records)
+  count.add_pivot_count( len(pivot_records) )
+  count.print(last)
+
+def pivot(src_dbfile, table1, table2, save_dbfile, pivot_name, cores=1):
+  if not os.path.isfile(src_dbfile):
     print("sqlite3 db file %s not exists", file=sys.stderr)
     sys.exit(2)
-  db = sqlite3.connect(dbfile)
-  if os.path.isfile(savefile):
-    os.remove(savefile)
-  #size = get_pivot_count(db, table1, table2)
+  db_src = sqlite3.connect(src_dbfile)
+  if os.path.isfile(save_dbfile):
+    os.remove(save_dbfile)
+  db_save = sqlite3.connect(save_dbfile)
+  create_table(db_save, pivot_name)
+  create_indices(db_save, pivot_name)
+
+  record_queues = [multiprocessing.Queue() for i in range(0, cores)]
+  pivot_queue = multiprocessing.Queue()
+  #debug.print(record_queues)
+  procs = [multiprocessing.Process(target=proc, args=(record_queues[i], pivot_queue)) for i in range(0, cores)]
+  #debug.print(procs)
+  for p in procs:
+    p.start()
+
   #debug.print(size)
-  cur = select_pivot(db, table1, table2)
+  cur = select_pivot(db_src, table1, table2)
   # 周辺化を行う対象フレーズ
   # curr_phrase -> pivot_phrase -> target の形の訳出を探す
   curr_phrase = ''
-  pivot_records = {}
-  count = 0
+  count = Counter()
+  pivot_count = 0
+  rows = []
   for row in cur:
     #print(row)
-    count += 1
     source = row[0]
-    pivot_phrase = row[1] # 参考までに取得しているが使わない
-    target = row[2]
-    scores1 = [float(score) for score in row[3].split(' ')]
-    scores2 = [float(score) for score in row[4].split(' ')]
-    align1 = row[5].split(' ')
-    align2 = row[6].split(' ')
-    counts1 = [int(count) for count in row[7].split(' ')]
-    counts2 = [int(count) for count in row[8].split(' ')]
-    if count % 10000 == 0:
-      progress.print("pivoted %(count)d records, current phrase: '%(source)s'" % locals())
-      pass
     if curr_phrase != source:
-      # 新しい原言語フレーズが出てきたので、前のフレーズに対する周辺化を終えて書き出す
-      write_records(savefile, curr_phrase, pivot_records)
-      # 対象フレーズとレコードを新しくする
+      # 新しい原言語フレーズが出てきたので、ここまでのデータを開いてるプロセスに処理してもらう
+      while True:
+        q = get_empty_queue(record_queues)
+        if q:
+          #debug.print(q)
+          break
+        if not pivot_queue.empty():
+          flush_pivot_records(db_save, pivot_name, count, pivot_queue)
+      q.put(rows)
+      rows = []
       curr_phrase = source
-      pivot_records = {}
-      #print("pivoting for '%s'" % curr_phrase)
-    if not target in pivot_records:
-      # 対象言語の訳出のレコードがまだ無いので作る
-      pivot_records[target] = [ [0, 0, 0, 0], {}, [0, 0, 0] ]
-    record = pivot_records[target]
-    # 訳出のスコア(条件付き確率)を掛けあわせて加算する
-    add_scores(record, scores1, scores2)
-    # アラインメントのマージ
-    merge_alignment(record, align1, align2)
-  # 最後の書き出し
-  progress.print("finished pivoting %(count)d records" % locals())
-  print()
-  write_records(savefile, curr_phrase, pivot_records)
+    count.add_row_count()
+    rows.append(row)
+    if not pivot_queue.empty():
+      flush_pivot_records(db_save, pivot_name, count, pivot_queue)
+  else:
+    # 最後のデータ処理
+    while True:
+      q = get_empty_queue(record_queues)
+      if q:
+        break
+    q.put(rows)
 
+  # すべてのワーカープロセスの終了（全てのキューが空になる）まで待つ
+  while not empty_all(record_queues):
+    pass
+  # ワーカープロセスを停止させる
+  for p in procs:
+    p.terminate()
+  # ピボットキューの残りを全て書き出す
+  while not pivot_queue.empty():
+    flush_pivot_records(db_save, pivot_name, count, pivot_queue)
+  count.print()
+  db_save.commit()
+  db_save.close()
+  db_src.close()
 
 if __name__ == '__main__':
-  if len(sys.argv) < 5:
-    usage()
-  dbfile = sys.argv[1]
-  table1 = sys.argv[2]
-  table2 = sys.argv[3]
-  savefile = sys.argv[4]
-  pivot(dbfile, table1, table2, savefile)
+  parser = argparse.ArgumentParser(description = 'load 2 phrase tables from sqlite3 and pivot into sqlite3 table')
+  parser.add_argument('src_dbfile', help = 'sqlite3 dbfile including following source tables')
+  parser.add_argument('table1', help = 'table name for task 1 of moses phrase-table')
+  parser.add_argument('table2', help = 'table name for task 2 of moses phrase-table')
+  parser.add_argument('save_dbfile', help = 'sqlite3 dbfile to result storing (can be the same with src_dbfile)')
+  parser.add_argument('pivot_name', help = 'table name for pivoted phrase-table')
+  parser.add_argument('--cores', help = 'number of processes parallel computing', type=int, default=1)
+  parser.add_argument('--ignore', help = 'threshold for ignoring the phrase translation probability (real number)', type=float, default=IGNORE)
+  args = vars(parser.parse_args())
+  #debug.print(args)
+
+  IGNORE = args['ignore']
+  del args['ignore']
+  pivot(**args)
 

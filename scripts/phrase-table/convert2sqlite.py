@@ -72,6 +72,7 @@ def convert(table_path, dbfile, table_name):
   create_table(db, table_name)
   make_indices(db, table_name)
   n = 0
+  scale = 10
   for line in f_in:
     n += 1
     line = line.decode('utf-8')
@@ -82,10 +83,11 @@ def convert(table_path, dbfile, table_name):
     align  = fields[3].strip()
     counts = fields[4].strip()
     insert_record(db, table_name, source, target, scores, align, counts)
-#    if n % 1000 == 0:
-    if n % 10000 == 0:
+    if n % scale == 0:
       ratio = f_in.tell() * 100.0 / size
       progress.print("loaded (%(ratio)3.2f%%): %(n)d records, last phrase: '%(source)s'" % locals())
+    if n > scale * 100:
+      scale *= 10
   progress.print("loaded (100%%): %(n)d records" % locals() )
   print()
   db.commit()
