@@ -2,7 +2,7 @@
 
 #THREADS=10
 THREADS=4
-IGNORE="1e-2"
+IGNORE="1e-3"
 
 dir=$(cd $(dirname $0); pwd)
 

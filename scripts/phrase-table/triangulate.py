@@ -15,15 +15,8 @@ import debug
 import progress
 
 IGNORE = 1e-3
-
-def usage():
-  print("usage: %s dbfile table1 table2 dest-phrase-table" % sys.argv[0])
-  sys.exit(1)
-
-def drop_table(db, table_name):
-  db.execute('''
-    DROP TABLE IF EXISTS %(table_name)s
-  ''' % locals() )
+#SCALEUP = 100
+SCALEUP = 1000
 
 def create_table(db, table_name):
   db.execute('''
@@ -49,26 +42,6 @@ def select_pivot(db, table1, table2):
       FROM %(table1)s INNER JOIN %(table2)s ON %(table1)s.target = %(table2)s.source
   ''' % locals() )
 
-def write_records(savefile, source, records):
-  if re.match('.*\.gz', savefile):
-    f_out = gzip.open(savefile, 'a')
-  else:
-    f_out = open(savefile, 'a')
-  for target, record in records.items():
-    rec  = source + ' ||| '
-    rec += target + ' ||| '
-    rec += str.join(' ', map(str, record[0])) + ' ||| '
-    rec += str.join(' ', sorted(record[1].keys()) ) + ' |||'
-    # 出現頻度の推定も行いたいが非常に困難
-    #rec += str.join(' ', map(str, record[2])) + ' |||'
-    rec += "\n"
-    if re.match('.*\.gz', savefile):
-      f_out.write(bytes(rec, 'utf-8'))
-    else:
-      f_out.write(rec)
-  f_out.close()
-
-
 def insert_records(db, table_name, records):
   for (source, target), record in records.items():
     scores = str.join(' ', map(str, record[0]) )
@@ -77,20 +50,17 @@ def insert_records(db, table_name, records):
     counts = None
     #if True or target == '、':
     #  print("inserting source: '%(source)s', target: '%(target)s'" % locals())
-    try:
-      db.execute('''
-        INSERT INTO %(table_name)s VALUES (
-          null,
-          "%(source)s",
-          "%(target)s",
-          "%(scores)s",
-          "%(align)s",
-          null
-        );
-      ''' % locals() )
-    except:
-      print("ERROR source: '%(source)s', target: '%(target)s'" % locals())
-      sys.exit(3)
+    sql = '''
+      INSERT INTO %(table_name)s VALUES (
+        null,
+        ?,
+        ?,
+        "%(scores)s",
+        "%(align)s",
+        null
+      );
+    ''' % locals()
+    db.execute(sql, (source, target) )
   #db.commit()
 
 
@@ -133,12 +103,23 @@ def empty_all(queues):
       return False
   return True
 
-def get_empty_queue(queues):
-  for q in queues:
+def get_empty_queue(procs, queues):
+  for i, p in enumerate(procs):
+    if not p.is_alive():
+      sys.stderr.write("\n[error] Process %(i)d was terminated\n" % locals() )
+      terminate_all(procs)
+      sys.exit(3)
+    q = queues[i]
     if q.empty():
       return q
   else:
     return None
+
+def terminate_all(procs):
+  print("terminating all the worker processes")
+  for p in procs:
+    p.terminate()
+    p.join()
 
 class Counter:
   def __init__(self):
@@ -156,11 +137,11 @@ class Counter:
   def should_print(self):
     '''プログレスを表示すべきかどうか
 
-    しきい値が増加単位の100倍を超えると、増加単位が10倍になる'''
+    しきい値が増加単位のSCALEUP倍を超えると、増加単位が10倍になる'''
     if self.pivot_count < self.threshold:
       return False
     else:
-      if self.threshold >= self.unit * 100:
+      if self.threshold >= self.unit * SCALEUP:
         self.unit *= 10
       self.threshold += self.unit
       return True
@@ -264,7 +245,7 @@ def pivot(src_dbfile, table1, table2, save_dbfile, pivot_name, cores=1):
     if curr_phrase != source:
       # 新しい原言語フレーズが出てきたので、ここまでのデータを開いてるプロセスに処理してもらう
       while True:
-        q = get_empty_queue(record_queues)
+        q = get_empty_queue(procs, record_queues)
         if q:
           #debug.print(q)
           break
@@ -280,7 +261,7 @@ def pivot(src_dbfile, table1, table2, save_dbfile, pivot_name, cores=1):
   else:
     # 最後のデータ処理
     while True:
-      q = get_empty_queue(record_queues)
+      q = get_empty_queue(procs, record_queues)
       if q:
         break
     q.put(rows)
