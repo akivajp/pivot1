@@ -4,12 +4,15 @@ KYTEA_ZH_DIC=/home/is/akiba-mi/usr/local/share/kytea/lcmc-0.4.0-1.mod
 MOSES=$HOME/exp/moses
 BIN=$HOME/usr/local/bin
 KYTEA=$BIN/kytea
+PYTHONPATH=$HOME/exp/explib-python/lib
 
 IRSTLM=~/exp/irstlm
 GIZA=~/usr/local/bin
 
 #THREADS=10
 THREADS=4
+
+IGNORE="1e-2"
 
 dir=$(cd $(dirname $0); pwd)
 
@@ -22,8 +25,10 @@ usage()
   echo "options:"
   echo "  --task_name={string}"
   echo "  --skip_pivot"
-  echo "  --tuning"
-  echo "  --test"
+  #echo "  --tuning"
+  echo "  --skip_tuning"
+  #echo "  --test"
+  echo "  --skip_test"
 }
 
 show_exec()
@@ -79,13 +84,13 @@ fi
 
 task1=${ARGS[0]}
 task2=${ARGS[1]}
+taskname1=$(basename $task1)
+taskname2=$(basename $task2)
 corpus_src=${ARGS[2]}
 
-trans1=${task1#*_}
-trans2=${task2#*_}
-lang1=${trans1%-*}
-lang2=${trans1#*-}
-lang3=${trans2#*-}
+lang1=$(expr $taskname1 : '.*_\(..\)-..')
+lang2=$(expr $taskname1 : '.*_..-\(..\)')
+lang3=$(expr $taskname2 : '.*_..-\(..\)')
 
 if [ $opt_task_name ]; then
   task=$opt_task_name
@@ -113,14 +118,18 @@ else
   
   # PIVOTING
   show_exec mkdir -p ${transdir}/model
-  show_exec ${dir}/phrase-table/pivot-phrase-table.sh ${task1} ${task2} ${workdir}
-  show_exec mv ${workdir}/phrase-table.gz ${transdir}/model
+  #show_exec ${dir}/phrase-table/pivot-phrase-table.sh ${task1} ${task2} ${workdir}
+  show_exec ${PYTHONPATH}/exp/phrasetable/pivot.py ${task1}/TM/model/phrase-table.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz --cores ${THREADS} --ignore ${IGNORE}
+  #show_exec mv ${workdir}/phrase-table.gz ${transdir}/model
   show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/moses.ini \> ${transdir}/model/moses.ini
 fi
 
 bindir=${task}/binmodel
 # -- TUNING --
-if [ $opt_tuning ]; then
+if [ $opt_skip_tuning ]; then
+  echo [skip] tuning
+else
+#if [ $opt_tuning ]; then
   show_exec ${dir}/tune-moses.sh ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang3} ${transdir}/model/moses.ini ${task}
 
   # -- BINARIZING --
@@ -131,7 +140,10 @@ if [ $opt_tuning ]; then
 fi
 
 # -- TESTING --
-if [ $opt_test ]; then
+if [ $opt_skip_test ]; then
+  echo [skip] testing
+else
+#if [ $opt_test ]; then
   show_exec mkdir -p $workdir
   # -- TESTING PRAIN --
   show_exec rm -rf ${workdir}/tmp

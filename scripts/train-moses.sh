@@ -29,8 +29,10 @@ usage()
   echo "  --skip_format"
   echo "  --skip_lm"
   echo "  --skip_train"
-  echo "  --tuning"
-  echo "  --test"
+  #echo "  --tuning"
+  echo "  --skip_tuning"
+  #echo "  --test"
+  echo "  --skip_test"
 }
 
 show_exec()
@@ -138,7 +140,10 @@ workdir="${task}/working"
 
 bindir=${task}/binmodel
 # -- TUNING --
-if [ $opt_tuning ]; then
+if [ $opt_skip_tuning ]; then
+  echo [skip] tuning
+else
+#if [ $opt_tuning ]; then
   show_exec ${dir}/tune-moses.sh ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang2} ${transdir}/model/moses.ini ${task}
 
   # -- BINARIZING --
@@ -150,7 +155,10 @@ if [ $opt_tuning ]; then
 fi
 
 # -- TESTING --
-if [ $opt_test ]; then
+if [ $opt_skip_test ]; then
+  echo [skip] testing
+else
+#if [ $opt_test ]; then
   show_exec mkdir -p $workdir
   # -- TESTING PRAIN --
   show_exec rm -rf ${workdir}/tmp

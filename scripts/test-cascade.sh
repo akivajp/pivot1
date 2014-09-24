@@ -60,25 +60,25 @@ then
   exit 1
 fi
 
-task1=${ARGS[0]}
-task2=${ARGS[1]}
-taskname1=$(basename $task1)
-taskname2=$(basename $task2)
+taskdir1=${ARGS[0]}
+taskdir2=${ARGS[1]}
+taskname1=$(basename $taskdir1)
+taskname2=$(basename $taskdir2)
 text=${ARGS[2]}
 ref=${ARGS[3]}
-method1=${task1%_*}
-method2=${task2%_*}
-lang1=$(expr $task1 : ".*_\(..\)" )
-lang2=$(expr $task1 : ".*_..-\(..\)" )
-lang3=$(expr $task2 : ".*_..-\(..\)" )
+method1=${taskname1%_*}
+method2=${taskname2%_*}
+lang1=$(expr $taskname1 : ".*_\(..\)" )
+lang2=$(expr $taskname1 : ".*_..-\(..\)" )
+lang3=$(expr $taskname2 : ".*_..-\(..\)" )
 
-ini1=${task1}/binmodel/moses.ini
-ini2=${task2}/binmodel/moses.ini
+ini1=${taskdir1}/binmodel/moses.ini
+ini2=${taskdir2}/binmodel/moses.ini
 if [ "$method1" == "hiero" ]; then
-  ini1=${task1}/working/mert-work/travatar.ini
+  ini1=${taskdir1}/working/mert-work/travatar.ini
 fi
 if [ "$method2" == "hiero" ]; then
-  ini2=${task2}/working/mert-work/travatar.ini
+  ini2=${taskdir2}/working/mert-work/travatar.ini
 fi
 
 echo METHOD1: $method1

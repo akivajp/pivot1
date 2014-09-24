@@ -27,8 +27,10 @@ usage()
   echo "  --skip_format"
   echo "  --skip_lm"
   echo "  --skip_train"
-  echo "  --tuning"
-  echo "  --test"
+  #echo "  --tuning"
+  echo "  --skip_tuning"
+  #echo "  --test"
+  echo "  --skip_test"
 }
 
 show_exec()
@@ -135,11 +137,17 @@ fi
 
 orig=$PWD
 
-if [ $opt_tuning ]; then
+if [ $opt_skip_tuning ]; then
+  echo [skip] tuning
+else
+#if [ $opt_tuning ]; then
   show_exec ${dir}/tune-travatar.sh ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} ${orig}/${transdir}/model/travatar.ini ${task}
 fi
 
-if [ $opt_test ]; then
+if [ $opt_skip_test ]; then
+  echo [skip] testing
+else
+#if [ $opt_test ]; then
   show_exec ${dir}/test-travatar.sh ${task} ${transdir}/model/travatar.ini ${workdir}/score1
 
   if [ -f ${workdir}/mert-work/travatar.ini ]; then
