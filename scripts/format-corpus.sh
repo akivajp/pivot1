@@ -21,6 +21,8 @@ DEV_SIZE=1000
 
 #echo "running script with PID: $$"
 
+dir=$(cd $(dirname $0); pwd)
+
 usage()
 {
   echo "usage: $0 lang_id1 src1 lang_id2 src2"
@@ -29,6 +31,7 @@ usage()
   echo "  --train_size={int}"
   echo "  --test_size={int}"
   echo "  --dev_size={int}"
+  echo "  --dev_test_size={int}"
   echo "  --task_name={string}"
 }
 
@@ -100,7 +103,13 @@ truecase()
 {
   lang=$1
   prefix=$2
-  show_exec $MOSES/scripts/recaser/truecase.perl --model ${corpus}/truecase-model.${lang} \< ${corpus}/${prefix}.tok.${lang} \> ${corpus}/${prefix}.true.${lang}
+  if [ $lang = "zh" ]; then
+    show_exec mv ${corpus}/${prefix}.tok.${lang} ${corpus}/${prefix}.true.${lang}
+  elif [ $lang = "ja" ]; then
+    show_exec mv ${corpus}/${prefix}.tok.${lang} ${corpus}/${prefix}.true.${lang}
+  else
+    show_exec $MOSES/scripts/recaser/truecase.perl --model ${corpus}/truecase-model.${lang} \< ${corpus}/${prefix}.tok.${lang} \> ${corpus}/${prefix}.true.${lang}
+  fi
 }
 
 proc_args $*
@@ -136,8 +145,13 @@ then
 fi
 
 echo TRAIN_SIZE: $train_size
-echo TEST_SIZE : $test_size
-echo DEV_SIZE  : $dev_size
+if [ ${opt_dev_test_size} ]; then
+  echo TEST_SIZE : $opt_dev_test_size
+  echo DEV_SIZE  : $opt_dev_test_size
+else
+  echo TEST_SIZE : $test_size
+  echo DEV_SIZE  : $dev_size
+fi
 
 if [ $opt_task_name ]; then
   corpus="${opt_task_name}/corpus"
@@ -149,25 +163,21 @@ show_exec mkdir -p $corpus
 show_exec head -n ${train_size} ${src1} \> $corpus/train.${lang1}
 show_exec head -n ${train_size} ${src2} \> $corpus/train.${lang2}
 
-#show_exec head -${test_size} $corpus/train.${lang1} \> $corpus/test.${lang1}
-#show_exec head -${test_size} $corpus/train.${lang2} \> $corpus/test.${lang2}
-
-#show_exec head -${test_size} ${src1} \> $corpus/test.${lang1}
-#show_exec head -${test_size} ${src2} \> $corpus/test.${lang2}
-
-offset=$(expr $train_size + 1)
-show_exec tail -n +${offset} ${src1} \| head -n ${test_size} \> $corpus/test.${lang1}
-show_exec tail -n +${offset} ${src2} \| head -n ${test_size} \> $corpus/test.${lang2}
-
-#show_exec tail -n +${test_size} ${src1} \> $corpus/train.${lang1}
-#show_exec tail -n +${test_size} ${src2} \> $corpus/train.${lang2}
-
-#show_exec head -${dev_size} ${src1} \> $corpus/dev.${lang1}
-#show_exec head -${dev_size} ${src2} \> $corpus/dev.${lang2}
-
-offset=$(expr $offset + $test_size)
-show_exec tail -n +${offset} ${src1} \| head -n ${dev_size} \> ${corpus}/dev.${lang1}
-show_exec tail -n +${offset} ${src2} \| head -n ${dev_size} \> ${corpus}/dev.${lang2}
+if [ $opt_dev_test_size ]; then
+  offset=$(expr $train_size + 1)
+  size=$(expr $opt_dev_test_size \* 2)
+  show_exec tail -n +${offset} ${src1} \| head -n ${size} \> ${corpus}/devtest.${lang1}
+  show_exec tail -n +${offset} ${src2} \| head -n ${size} \> ${corpus}/devtest.${lang2}
+  show_exec cat ${corpus}/devtest.${lang1} \| ${dir}/interleave.py ${corpus}/{test,dev}.${lang1}
+  show_exec cat ${corpus}/devtest.${lang2} \| ${dir}/interleave.py ${corpus}/{test,dev}.${lang2}
+else
+  offset=$(expr $train_size + 1)
+  show_exec tail -n +${offset} ${src1} \| head -n ${test_size} \> $corpus/test.${lang1}
+  show_exec tail -n +${offset} ${src2} \| head -n ${test_size} \> $corpus/test.${lang2}
+  offset=$(expr $offset + $test_size)
+  show_exec tail -n +${offset} ${src1} \| head -n ${dev_size} \> ${corpus}/dev.${lang1}
+  show_exec tail -n +${offset} ${src2} \| head -n ${dev_size} \> ${corpus}/dev.${lang2}
+fi
 
 tokenize ${lang1} train
 tokenize ${lang2} train

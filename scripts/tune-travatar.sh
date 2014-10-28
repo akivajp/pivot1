@@ -10,6 +10,9 @@ THREADS=10
 usage()
 {
   echo "usage: $0 corpus1 corpus2 path/to/travatar.ini task_dir"
+  echo ""
+  echo "options:"
+  echo "  --threads={integer}"
 }
 
 show_exec()
@@ -57,6 +60,10 @@ if [ ${#ARGS[@]} -lt 4 ]
 then
   usage
   exit 1
+fi
+
+if [ ${opt_threads} ]; then
+  THREADS=${opt_threads}
 fi
 
 src1=${ARGS[0]}

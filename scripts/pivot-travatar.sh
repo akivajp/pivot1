@@ -12,7 +12,8 @@ GIZA=~/usr/local/bin
 #THREADS=10
 THREADS=4
 
-IGNORE="1e-2"
+#IGNORE="-5"
+IGNORE="-7"
 
 dir=$(cd $(dirname $0); pwd)
 
@@ -25,7 +26,7 @@ usage()
   echo "options:"
   echo "  --task_name={string}"
   echo "  --threads={integer}"
-  echo "  --on_memory"
+#  echo "  --on_memory"
   echo "  --skip_pivot"
   echo "  --skip_tuning"
   echo "  --skip_test"
@@ -88,6 +89,7 @@ taskname1=$(basename $task1)
 taskname2=$(basename $task2)
 corpus_src=${ARGS[2]}
 
+method=$(expr $taskname1 : '\(.*\)_..-..')
 lang1=$(expr $taskname1 : '.*_\(..\)-..')
 lang2=$(expr $taskname1 : '.*_..-\(..\)')
 lang3=$(expr $taskname2 : '.*_..-\(..\)')
@@ -95,11 +97,11 @@ lang3=$(expr $taskname2 : '.*_..-\(..\)')
 if [ $opt_task_name ]; then
   task=$opt_task_name
 else
-  task="pivot_moses_${lang1}-${lang2}-${lang3}"
+  task="pivot_${method}_${lang1}-${lang2}-${lang3}"
 fi
 
-if [ ${opt_threads} ]; then
-  THREADS=${opt_threads}
+if [ $opt_threads ]; then
+  THREADS=$opt_threads
 fi
 
 show_exec mkdir -p ${task}
@@ -110,6 +112,8 @@ workdir="${task}/working"
 transdir=${task}/TM
 if [ $opt_skip_pivot ]; then
   echo [skip] pivot
+elif [ -f ${transdir}/model/travatar.ini ]; then
+  echo [autoskip] pivot
 else
   # COPYING CORPUS
   show_exec mkdir -p ${corpus}
@@ -123,13 +127,19 @@ else
   # PIVOTING
   show_exec mkdir -p ${transdir}/model
   if [ $opt_on_memory ]; then
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/pivot.py ${task1}/TM/model/phrase-table.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz --ignore ${IGNORE}
+    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/pivot.py ${task1}/TM/model/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz --ignore ${IGNORE}
   else
     show_exec mkdir -p ${workdir}
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/pivot.py ${task1}/TM/model/phrase-table.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz --ignore ${IGNORE} --dbfile ${workdir}/phrase.db
+    show_exec zcat ${task1}/TM/model/rule-table.gz \> ${workdir}/rule_${lang1}-${lang2}
+    show_exec zcat ${task2}/TM/model/rule-table.gz \> ${workdir}/rule_${lang2}-${lang3}
+    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/pivot.py ${task1}/TM/model/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz --ignore ${IGNORE} --dbfile ${workdir}/rule.db
+    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_${lang1}-${lang2} ${workdir}/rule_${lang2}-${lang3} ${transdir}/model/rule-table.gz --ignore ${IGNORE}
   fi
   #show_exec mv ${workdir}/phrase-table.gz ${transdir}/model
-  show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/moses.ini \> ${transdir}/model/moses.ini
+  show_exec cp ${task2}/TM/model/glue-rules ${transdir}/model/
+  show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/travatar.ini \> ${transdir}/model/travatar.ini
+  show_exec rm ${workdir}/rule_${lang1}-${lang2} ${workdir}/rule_${lang1}-${lang2}.index
+  show_exec rm ${workdir}/rule_${lang2}-${lang3} ${workdir}/rule_${lang2}-${lang3}.index
 fi
 
 bindir=${task}/binmodel
@@ -137,30 +147,22 @@ bindir=${task}/binmodel
 if [ $opt_skip_tuning ]; then
   echo [skip] tuning
 else
-#if [ $opt_tuning ]; then
-  show_exec ${dir}/tune-moses.sh ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang3} ${transdir}/model/moses.ini ${task} --threads=${THREADS}
-
-  # -- BINARIZING --
-  show_exec mkdir -p ${bindir}
-  show_exec ${BIN}/processPhraseTable -ttable 0 0 ${transdir}/model/phrase-table.gz -nscores 5 -out ${bindir}/phrase-table
-  show_exec sed -e "s/PhraseDictionaryMemory/PhraseDictionaryBinary/" -e "s#${transdir}/model/phrase-table\.gz#${bindir}/phrase-table#" -e "s#${transdir}/model/reordering-table\.wbe-msd-bidirectional-fe\.gz#${bindir}/reordering-table#" ${workdir}/mert-work/moses.ini \> ${bindir}/moses.ini
-
+  show_exec ${dir}/tune-travatar.sh ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang3} ${transdir}/model/travatar.ini ${task} --threads=${THREADS}
 fi
 
 # -- TESTING --
-if [ $opt_skip_test ]; then
+if [ -f ${workdir}/score-tuned ]; then
+  echo [autoskip] testing
+elif [ $opt_skip_test ]; then
   echo [skip] testing
 else
 #if [ $opt_test ]; then
-  show_exec mkdir -p $workdir
-  # -- TESTING PRAIN --
-  show_exec rm -rf ${workdir}/tmp
-  show_exec ${dir}/filter-moses.sh ${transdir}/model/moses.ini ${corpus}/test.true.${lang1} ${workdir}/tmp/filtered
-  show_exec ${dir}/test-moses.sh ${task} ${workdir}/tmp/filtered/moses.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang3} ${workdir}/score1.out --threads=${THREADS}
+  show_exec ${dir}/test-travatar.sh ${task} ${transdir}/model/travatar.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang3} notune --threads=${THREADS}
 
-  if [ -f ${bindir}/moses.ini ]; then
+  if [ -f ${workdir}/mert-work/travatar.ini ]; then
     # -- TESTING BINARISED --
-    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang3} ${workdir}/score2.out --threads=${THREADS}
+    show_exec ${dir}/test-travatar.sh ${task} ${workdir}/mert-work/travatar.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang3} tuned --threads${THREADS}
+    show_exec ${dir}/test-travatar.sh ${task} ${workdir}/mert-work/travatar.ini ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang3} dev --threads${THREADS}
   fi
 fi
 

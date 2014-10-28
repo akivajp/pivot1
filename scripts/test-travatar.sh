@@ -10,7 +10,10 @@ THREADS=4
 
 usage()
 {
-  echo "usage: $0 task path/to/travatar.ini [output]"
+  echo "usage: $0 task path/to/travatar.ini input ref [test_name]"
+  echo ""
+  echo "options:"
+  echo "  --threads={integer}"
 }
 
 show_exec()
@@ -54,31 +57,34 @@ proc_args()
 
 proc_args $*
 
-if [ ${#ARGS[@]} -lt 2 ]
+if [ ${#ARGS[@]} -lt 4 ]
 then
   usage
   exit 1
 fi
 
+if [ ${opt_threads} ]; then
+  THREADS=${opt_threads}
+fi
+
 task=${ARGS[0]}
 travatar_ini=${ARGS[1]}
-output=${ARGS[2]}
-
-trans=${task#./}
-trans=${trans%/}
-trans=${trans#*_}
-lang1=${trans%-*}
-lang2=${trans#*-}
+input=${ARGS[2]}
+ref=${ARGS[3]}
+test_name=${ARGS[4]}
 
 workdir="${task}/working"
-corpus="${task}/corpus"
 
 show_exec mkdir -p ${workdir}
-show_exec ${TRAVATAR}/script/train/filter-model.pl ${travatar_ini} ${workdir}/filtered-test.ini ${workdir}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${corpus}/test.true.${lang1}\"
-show_exec ${BIN}/travatar -config_file ${workdir}/filtered-test.ini -threads ${THREADS} \< ${corpus}/test.true.${lang1} \> ${workdir}/translated.out
-if [ "${output}" ]; then
-  show_exec ${BIN}/mt-evaluator -ref ${corpus}/test.true.${lang2} ${workdir}/translated.out \> ${output}
+show_exec ${TRAVATAR}/script/train/filter-model.pl ${travatar_ini} ${workdir}/filtered-test.ini ${workdir}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${input}\"
+if [ "${test_name}" ]; then
+  output=${workdir}/translated-${test_name}.out
+  score=${workdir}/score-${test_name}.out
+  show_exec ${BIN}/travatar -config_file ${workdir}/filtered-test.ini -threads ${THREADS} \< ${input} \> ${output}
+  show_exec ${BIN}/mt-evaluator -ref ${ref} ${output} \> ${score}
 else
-  show_exec ${BIN}/mt-evaluator -ref ${corpus}/test.true.${lang2} ${workdir}/translated.out
+  show_exec ${BIN}/travatar -config_file ${workdir}/filtered-test.ini -threads ${THREADS} \< ${input} \> ${workdir}/translated.out
+  show_exec ${BIN}/mt-evaluator -ref ${ref} ${workdir}/translated.out
 fi
+show_exec rm -rf ${workdir}/filtered-test
 

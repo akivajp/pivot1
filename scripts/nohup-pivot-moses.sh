@@ -1,6 +1,11 @@
 #!/bin/bash
 
 dir=$(cd $(dirname $0); pwd)
+if [ $# -lt 3 ]; then
+  ${dir}/pivot-moses.sh $*
+  exit 1
+fi
+
 task1=$1
 task2=$2
 trans1=${task1#*_}

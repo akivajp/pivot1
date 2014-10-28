@@ -1,7 +1,12 @@
 #!/bin/bash
 
 dir=$(cd $(dirname $0); pwd)
-task="hiero_$1-$3"
+if [ $# -lt 2 ]; then
+  ${dir}/train-hiero.sh $*
+  exit 1
+fi
+
+task="hiero_$1-$2"
 stamp=$(date +"%Y%m%d-%H%M%S")
 now=$(date +"%Y/%m/%d %H:%M:%S")
 output="nohup_${task}_$stamp.out"

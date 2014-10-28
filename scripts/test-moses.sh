@@ -8,7 +8,10 @@ THREADS=4
 
 usage()
 {
-  echo "usage: $0 task path/to/moses.ini input ref [output]"
+  echo "usage: $0 task path/to/moses.ini input ref [test_name]"
+  echo ""
+  echo "options:"
+  echo "  --threads={integer}"
 }
 
 show_exec()
@@ -52,34 +55,34 @@ proc_args()
 
 proc_args $*
 
-if [ ${#ARGS[@]} -lt 5 ]
+if [ ${#ARGS[@]} -lt 4 ]
 then
   usage
   exit 1
+fi
+
+if [ ${opt_threads} ]; then
+  THREADS=${opt_threads}
 fi
 
 task=${ARGS[0]}
 moses_ini=${ARGS[1]}
 input=${ARGS[2]}
 ref=${ARGS[3]}
-output=${ARGS[4]}
-
-#trans=${task#./}
-#trans=${trans%/}
-#trans=${trans#*_}
-#lang1=${trans%-*}
-#lang2=${trans#*-}
+test_name=${ARGS[4]}
 
 workdir="${task}/working"
-#corpus="${task}/corpus"
 
 show_exec mkdir -p ${workdir}
 #show_exec ${MOSES}/bin/moses -f ${moses_ini} -threads ${THREADS} \< ${corpus}/test.true.${lang1} \> ${workdir}/translated.out
-show_exec ${MOSES}/bin/moses -f ${moses_ini} -threads ${THREADS} \< ${input} \> ${workdir}/translated.out
-if [ "$output" ]; then
+if [ "${test_name}" ]; then
+  output=${workdir}/translated-${test_name}.out
+  score=${workdir}/score-${test_name}.out
   #show_exec ${BIN}/mt-evaluator -ref ${corpus}/test.true.${lang2} ${workdir}/translated.out \> ${output}
-  show_exec ${BIN}/mt-evaluator -ref ${ref} ${workdir}/translated.out \> ${output}
+  show_exec ${MOSES}/bin/moses -f ${moses_ini} -threads ${THREADS} \< ${input} \> ${output}
+  show_exec ${BIN}/mt-evaluator -ref ${ref} ${output} \> ${score}
 else
+  show_exec ${MOSES}/bin/moses -f ${moses_ini} -threads ${THREADS} \< ${input} \> ${output}
   show_exec ${BIN}/mt-evaluator -ref ${ref} ${workdir}/translated.out
 fi
 

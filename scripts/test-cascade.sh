@@ -11,6 +11,9 @@ THREADS=4
 usage()
 {
   echo "usage: $0 task1 task2 text ref"
+  echo ""
+  echo "options:"
+  echo "  --threads={integer}"
 }
 
 show_exec()
@@ -60,6 +63,10 @@ then
   exit 1
 fi
 
+if [ ${opt_threads} ]; then
+  THREADS=${opt_threads}
+fi
+
 taskdir1=${ARGS[0]}
 taskdir2=${ARGS[1]}
 taskname1=$(basename $taskdir1)
@@ -89,23 +96,39 @@ echo LANG3: $lang3
 echo INI1: $ini1
 echo INI2: $ini2
 
-workdir="cascade_${method1}_${lang1}-${lang2}-${lang3}"
+if [ "$method1" = "$method2" ]; then
+  workdir="cascade_${method1}_${lang1}-${lang2}-${lang3}"
+else
+  workdir="cascade_${method1}_${method2}_${lang1}-${lang2}-${lang3}"
+fi
 
 target1=${workdir}/translated.${lang2}
-show_exec mkdir -p ${workdir}
-if [ "$method1" == "moses" ]; then
-  show_exec ${MOSES}/bin/moses -f ${ini1} -threads ${THREADS} \< ${text} \> ${target1}
-elif [ "$method1" == "hiero" ]; then
-  show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini1} ${workdir}/${taskname1}/filtered-test.ini ${workdir}/${taskname1}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${text}\"
-  show_exec ${BIN}/travatar -config_file ${workdir}/${taskname1}/filtered-test.ini -threads ${THREADS} \< ${text} \> ${target1}
+if [ -f ${target1} ]; then
+  echo [skip] translating ${lang1} -> ${lang2}
+else
+  show_exec mkdir -p ${workdir}
+  ${dir}/wait-file.sh ${ini1}
+  if [ "$method1" == "moses" ]; then
+    show_exec ${MOSES}/bin/moses -f ${ini1} -threads ${THREADS} \< ${text} \> ${target1}
+  elif [ "$method1" == "hiero" ]; then
+    show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini1} ${workdir}/${taskname1}/filtered-test.ini ${workdir}/${taskname1}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${text}\"
+    show_exec ${BIN}/travatar -config_file ${workdir}/${taskname1}/filtered-test.ini -threads ${THREADS} \< ${text} \> ${target1}
+    show_exec rm -rf ${workdir}/${taskname1}
+  fi
 fi
 
 target2=${workdir}/translated.${lang3}
-if [ "$method2" == "moses" ]; then
-  show_exec ${MOSES}/bin/moses -f ${ini2} -threads ${THREADS} \< ${target1} \> ${target2}
-elif [ "$method1" == "hiero" ]; then
-  show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini2} ${workdir}/${taskname2}/filtered-test.ini ${workdir}/${taskname2}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${target1}\"
-  show_exec ${BIN}/travatar -config_file ${workdir}/${taskname2}/filtered-test.ini -threads ${THREADS} \< ${target1} \> ${target2}
+if [ -f ${target2} ]; then
+  echo [skip] translating ${lang2} -> ${lang3}
+else
+  ${dir}/wait-file.sh ${ini2}
+  if [ "$method2" == "moses" ]; then
+    show_exec ${MOSES}/bin/moses -f ${ini2} -threads ${THREADS} \< ${target1} \> ${target2}
+  elif [ "$method1" == "hiero" ]; then
+    show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini2} ${workdir}/${taskname2}/filtered-test.ini ${workdir}/${taskname2}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${target1}\"
+    show_exec ${BIN}/travatar -config_file ${workdir}/${taskname2}/filtered-test.ini -threads ${THREADS} \< ${target1} \> ${target2}
+    show_exec rm -rf ${workdir}/${taskname2}
+  fi
 fi
 
 show_exec ${BIN}/mt-evaluator -ref ${ref} ${target2} \> ${workdir}/score.out
