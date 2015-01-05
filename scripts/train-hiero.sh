@@ -1,19 +1,7 @@
 #!/bin/bash
 
-KYTEA=/home/is/akiba-mi/usr/local/bin/kytea
-KYTEA_ZH_DIC=/home/is/akiba-mi/usr/local/share/kytea/lcmc-0.4.0-1.mod
-
-IRSTLM=~/exp/irstlm
-GIZA=~/usr/local/bin
-TRAVATAR=$HOME/exp/travatar
-BIN=$HOME/usr/local/bin
-
-#THREADS=10
-THREADS=4
-
-dir=$(cd $(dirname $0); pwd)
-
-echo "running script with PID: $$"
+dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
+source "${dir}/common.sh"
 
 usage()
 {
@@ -34,56 +22,6 @@ usage()
   echo "  --skip_test"
   echo "  --overwrite"
 }
-
-show_exec()
-{
-  echo "[exec] $*"
-  eval $*
-
-  if [ $? -gt 0 ]
-  then
-    echo "[error on exec]: $*"
-    exit 1
-  fi
-}
-
-proc_args()
-{
-  ARGS=()
-  OPTS=()
-
-  while [ $# -gt 0 ]
-  do
-    arg=$1
-    case $arg in
-      --*=* )
-        opt=${arg#--}
-        name=${opt%=*}
-        var=${opt#*=}
-        eval "opt_${name}=${var}"
-        ;;
-      --* )
-        name=${arg#--}
-        eval "opt_${name}=1"
-        ;;
-      -* )
-        OPTS+=($arg)
-        ;;
-      * )
-        ARGS+=($arg)
-        ;;
-    esac
-
-    shift
-  done
-}
-
-abspath()
-{
-  echo $(cd $(dirname $1) && pwd)/$(basename $1)
-}
-
-proc_args $*
 
 lang1=${ARGS[0]}
 lang2=${ARGS[1]}
@@ -164,7 +102,8 @@ elif [ $opt_skip_tuning ]; then
   echo [skip] tuning
 else
   orig=$PWD
-  show_exec ${dir}/tune-travatar.sh ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} ${orig}/${transdir}/model/travatar.ini ${task} --threads=${THREADS}
+  show_exec ${dir}/tune-travatar.sh ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} ${orig}/${transdir}/model/travatar.ini ${task} --threads=${THREADS} --format=word
+  show_exec mkdir -p ${tunedir}
   show_exec cp ${workdir}/mert-work/travatar.ini ${tunedir}
   show_exec rm -rf ${workdir}/mert-work/filtered
 fi
@@ -176,9 +115,9 @@ elif [ $opt_skip_test ]; then
 else
   show_exec ${dir}/test-travatar.sh ${task} ${transdir}/model/travatar.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang2} notune --threads=${THREADS}
 
-  if [ -f ${workdir}/mert-work/travatar.ini ]; then
-    show_exec ${dir}/test-travatar.sh ${task} ${tunedir}/travatar.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang2} tuned --threads${THREADS}
-    show_exec ${dir}/test-travatar.sh ${task} ${tunedir}/travatar.ini ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang2} dev --threads${THREADS}
+  if [ -f ${tunedir}/travatar.ini ]; then
+    show_exec ${dir}/test-travatar.sh ${task} ${tunedir}/travatar.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang2} tuned --threads=${THREADS}
+    show_exec ${dir}/test-travatar.sh ${task} ${tunedir}/travatar.ini ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang2} dev --threads=${THREADS}
   fi
 fi
 

@@ -177,7 +177,7 @@ else
 fi
 
 # -- TESTING --
-if [ ! $opt_overwrite ] && [ -f ${workdir}/score2.out ]; then
+if [ ! $opt_overwrite ] && [ -f ${workdir}/score-dev.out ]; then
   echo [autoskip] testing
 elif [ $opt_skip_test ]; then
   echo [skip] testing
@@ -188,6 +188,7 @@ else
   show_exec rm -rf ${workdir}/filtered
   show_exec ${dir}/filter-moses.sh ${transdir}/model/moses.ini ${corpus}/test.true.${lang1} ${workdir}/filtered
   show_exec ${dir}/test-moses.sh ${task} ${workdir}/filtered/moses.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang2} plain --threads=${THREADS}
+  show_exec rm -rf ${workdir}/filtered
 
   if [ -f ${bindir}/moses.ini ]; then
     # -- TESTING BINARISED --

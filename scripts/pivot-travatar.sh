@@ -10,10 +10,10 @@ IRSTLM=~/exp/irstlm
 GIZA=~/usr/local/bin
 
 #THREADS=10
-THREADS=4
+THREADS=8
 
-#IGNORE="-5"
-IGNORE="-7"
+#THRESHOLD="-7"
+NBEST=40
 
 dir=$(cd $(dirname $0); pwd)
 
@@ -24,12 +24,13 @@ usage()
   echo "usage: $0 task1 task2 corpus_dir"
   echo ""
   echo "options:"
+  echo "  --overwrite"
   echo "  --task_name={string}"
   echo "  --threads={integer}"
-#  echo "  --on_memory"
   echo "  --skip_pivot"
   echo "  --skip_tuning"
   echo "  --skip_test"
+  echo "  --nbest={integer}"
 }
 
 show_exec()
@@ -112,7 +113,7 @@ workdir="${task}/working"
 transdir=${task}/TM
 if [ $opt_skip_pivot ]; then
   echo [skip] pivot
-elif [ -f ${transdir}/model/travatar.ini ]; then
+elif [ ! $opt_overwrite ] && [ -f ${transdir}/model/travatar.ini ]; then
   echo [autoskip] pivot
 else
   # COPYING CORPUS
@@ -126,28 +127,36 @@ else
   
   # PIVOTING
   show_exec mkdir -p ${transdir}/model
-  if [ $opt_on_memory ]; then
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/pivot.py ${task1}/TM/model/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz --ignore ${IGNORE}
-  else
-    show_exec mkdir -p ${workdir}
-    show_exec zcat ${task1}/TM/model/rule-table.gz \> ${workdir}/rule_${lang1}-${lang2}
-    show_exec zcat ${task2}/TM/model/rule-table.gz \> ${workdir}/rule_${lang2}-${lang3}
-    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/pivot.py ${task1}/TM/model/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz --ignore ${IGNORE} --dbfile ${workdir}/rule.db
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_${lang1}-${lang2} ${workdir}/rule_${lang2}-${lang3} ${transdir}/model/rule-table.gz --ignore ${IGNORE}
+  show_exec mkdir -p ${workdir}
+  show_exec zcat ${task1}/TM/model/rule-table.gz \> ${workdir}/rule_${lang1}-${lang2}
+  show_exec zcat ${task2}/TM/model/rule-table.gz \> ${workdir}/rule_${lang2}-${lang3}
+  options=""
+  if [ "${THRESHOLD}" ]; then
+    options="${options} --threshold ${THRESHOLD}"
   fi
-  #show_exec mv ${workdir}/phrase-table.gz ${transdir}/model
+  if [ "${opt_nbest}" ]; then
+    options="${options} --nbest ${opt_nbest}"
+  else
+    options="${options} --nbest ${NBEST}"
+  fi
+  show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_${lang1}-${lang2} ${workdir}/rule_${lang2}-${lang3} ${transdir}/model/rule-table.gz ${options}
   show_exec cp ${task2}/TM/model/glue-rules ${transdir}/model/
   show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/travatar.ini \> ${transdir}/model/travatar.ini
   show_exec rm ${workdir}/rule_${lang1}-${lang2} ${workdir}/rule_${lang1}-${lang2}.index
   show_exec rm ${workdir}/rule_${lang2}-${lang3} ${workdir}/rule_${lang2}-${lang3}.index
 fi
 
-bindir=${task}/binmodel
+tunedir=${task}/tuned
 # -- TUNING --
-if [ $opt_skip_tuning ]; then
+if [ ! ${opt_overwrite} ] && [ -f ${tunedir}/travatar.ini ]; then
+  echo [autoskip] tuning
+elif [ $opt_skip_tuning ]; then
   echo [skip] tuning
 else
   show_exec ${dir}/tune-travatar.sh ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang3} ${transdir}/model/travatar.ini ${task} --threads=${THREADS}
+  show_exec mkdir -p ${tunedir}
+  show_exec cp ${workdir}/mert-work/travatar.ini ${tunedir}
+  show_exec rm -rf ${workdir}/mert-work/filtered
 fi
 
 # -- TESTING --
@@ -161,8 +170,8 @@ else
 
   if [ -f ${workdir}/mert-work/travatar.ini ]; then
     # -- TESTING BINARISED --
-    show_exec ${dir}/test-travatar.sh ${task} ${workdir}/mert-work/travatar.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang3} tuned --threads${THREADS}
-    show_exec ${dir}/test-travatar.sh ${task} ${workdir}/mert-work/travatar.ini ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang3} dev --threads${THREADS}
+    show_exec ${dir}/test-travatar.sh ${task} ${workdir}/mert-work/travatar.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang3} tuned --threads=${THREADS}
+    show_exec ${dir}/test-travatar.sh ${task} ${workdir}/mert-work/travatar.ini ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang3} dev --threads=${THREADS}
   fi
 fi
 

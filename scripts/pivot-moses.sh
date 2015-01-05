@@ -10,9 +10,10 @@ IRSTLM=~/exp/irstlm
 GIZA=~/usr/local/bin
 
 #THREADS=10
-THREADS=4
+THREADS=8
 
-IGNORE="1e-2"
+#THRESHOLD="1e-2"
+NBEST=30
 
 dir=$(cd $(dirname $0); pwd)
 
@@ -23,12 +24,14 @@ usage()
   echo "usage: $0 task1 task2 corpus_dir"
   echo ""
   echo "options:"
+  echo "  --overwrite"
   echo "  --task_name={string}"
   echo "  --threads={integer}"
-  echo "  --on_memory"
+#  echo "  --on_memory"
   echo "  --skip_pivot"
   echo "  --skip_tuning"
   echo "  --skip_test"
+  echo "  --nbest={integer}"
 }
 
 show_exec()
@@ -110,6 +113,8 @@ workdir="${task}/working"
 transdir=${task}/TM
 if [ $opt_skip_pivot ]; then
   echo [skip] pivot
+elif [ ! $opt_overwrite ] && [ -f ${transdir}/model/moses.ini ]; then
+  echo [autoskip] pivot
 else
   # COPYING CORPUS
   show_exec mkdir -p ${corpus}
@@ -122,14 +127,22 @@ else
   
   # PIVOTING
   show_exec mkdir -p ${transdir}/model
-  if [ $opt_on_memory ]; then
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/pivot.py ${task1}/TM/model/phrase-table.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz --ignore ${IGNORE}
-  else
-    show_exec mkdir -p ${workdir}
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/pivot.py ${task1}/TM/model/phrase-table.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz --ignore ${IGNORE} --dbfile ${workdir}/phrase.db
+  show_exec mkdir -p ${workdir}
+  show_exec zcat ${task1}/TM/model/phrase-table.gz \> ${workdir}/phrase_${lang1}-${lang2}
+  show_exec zcat ${task2}/TM/model/phrase-table.gz \> ${workdir}/phrase_${lang2}-${lang3}
+  options=""
+  if [ "${THRESHOLD}" ]; then
+    options="${options} --threshold ${THRESHOLD}"
   fi
-  #show_exec mv ${workdir}/phrase-table.gz ${transdir}/model
+  if [ "${opt_nbest}" ]; then
+    options="${options} --nbest ${opt_nbest}"
+  else
+    options="${options} --nbest ${NBEST}"
+  fi
+  show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/triangulate.py ${workdir}/phrase_${lang1}-${lang2} ${workdir}/phrase_${lang2}-${lang3} ${transdir}/model/phrase-table.gz ${options}
   show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/moses.ini \> ${transdir}/model/moses.ini
+  show_exec rm ${workdir}/phrase_${lang1}-${lang2} ${workdir}/phrase_${lang1}-${lang2}.index
+  show_exec rm ${workdir}/phrase_${lang2}-${lang3} ${workdir}/phrase_${lang2}-${lang3}.index
 fi
 
 bindir=${task}/binmodel
@@ -148,19 +161,23 @@ else
 fi
 
 # -- TESTING --
-if [ $opt_skip_test ]; then
+if [ ! $opt_overwrite ] && [ -f ${workdir}/score-dev.out ]; then
+  echo [autoskip] testing
+elif [ $opt_skip_test ]; then
   echo [skip] testing
 else
 #if [ $opt_test ]; then
   show_exec mkdir -p $workdir
   # -- TESTING PRAIN --
-  show_exec rm -rf ${workdir}/tmp
-  show_exec ${dir}/filter-moses.sh ${transdir}/model/moses.ini ${corpus}/test.true.${lang1} ${workdir}/tmp/filtered
-  show_exec ${dir}/test-moses.sh ${task} ${workdir}/tmp/filtered/moses.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang3} ${workdir}/score1.out --threads=${THREADS}
+  show_exec rm -rf ${workdir}/filtered
+  show_exec ${dir}/filter-moses.sh ${transdir}/model/moses.ini ${corpus}/test.true.${lang1} ${workdir}/filtered
+  show_exec ${dir}/test-moses.sh ${task} ${workdir}/filtered/moses.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang3} plain --threads=${THREADS}
+  show_exec rm -rf ${workdir}/filtered
 
   if [ -f ${bindir}/moses.ini ]; then
     # -- TESTING BINARISED --
-    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang3} ${workdir}/score2.out --threads=${THREADS}
+    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/test.true.${lang1} ${corpus}/test.true.${lang3} tuned --threads=${THREADS}
+    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang3} dev --threads=${THREADS}
   fi
 fi
 

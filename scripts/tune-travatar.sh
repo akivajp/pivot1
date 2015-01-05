@@ -6,6 +6,7 @@ dir=$(cd $(dirname $0); pwd)
 
 NBEST=200
 THREADS=10
+FORMAT="penn"
 
 usage()
 {
@@ -13,6 +14,7 @@ usage()
   echo ""
   echo "options:"
   echo "  --threads={integer}"
+  echo "  --format={penn,egret,word}"
 }
 
 show_exec()
@@ -66,6 +68,10 @@ if [ ${opt_threads} ]; then
   THREADS=${opt_threads}
 fi
 
+if [ ${opt_format} ]; then
+  FORMAT=${opt_format}
+fi
+
 src1=${ARGS[0]}
 src2=${ARGS[1]}
 moses_ini=${ARGS[2]}
@@ -74,5 +80,6 @@ task=${ARGS[3]}
 workdir="${task}/working"
 show_exec mkdir -p ${workdir}
 #show_exec cd ${workdir}
-show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${moses_ini} -nbest ${NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} --working-dir ${workdir}/mert-work -threads ${THREADS} -eval bleu \> ${task}/tune.log
+#show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${moses_ini} -nbest ${NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} --working-dir ${workdir}/mert-work -threads ${THREADS} -eval bleu \> ${task}/tune.log
+show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${moses_ini} -nbest ${NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} --working-dir ${workdir}/mert-work -in-format ${FORMAT} -threads ${THREADS} -eval bleu \> ${task}/tune.log
 

@@ -6,11 +6,11 @@ BIN=$HOME/usr/local/bin
 dir=$(cd $(dirname $0); pwd)
 
 #THREADS=10
-THREADS=4
+THREADS=8
 
 usage()
 {
-  echo "usage: $0 task1 task2 text ref"
+  echo "usage: $0 task1 task2 text ref [testname]"
   echo ""
   echo "options:"
   echo "  --threads={integer}"
@@ -73,6 +73,7 @@ taskname1=$(basename $taskdir1)
 taskname2=$(basename $taskdir2)
 text=${ARGS[2]}
 ref=${ARGS[3]}
+testname=${ARGS[4]}
 method1=${taskname1%_*}
 method2=${taskname2%_*}
 lang1=$(expr $taskname1 : ".*_\(..\)" )
@@ -103,6 +104,9 @@ else
 fi
 
 target1=${workdir}/translated.${lang2}
+if [ "${testname}" ]; then
+  target1=${workdir}/translated-${testname}.${lang2}
+fi
 if [ -f ${target1} ]; then
   echo [skip] translating ${lang1} -> ${lang2}
 else
@@ -111,13 +115,17 @@ else
   if [ "$method1" == "moses" ]; then
     show_exec ${MOSES}/bin/moses -f ${ini1} -threads ${THREADS} \< ${text} \> ${target1}
   elif [ "$method1" == "hiero" ]; then
-    show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini1} ${workdir}/${taskname1}/filtered-test.ini ${workdir}/${taskname1}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${text}\"
+#    show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini1} ${workdir}/${taskname1}/filtered-test.ini ${workdir}/${taskname1}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${text}\"
+    show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini1} ${workdir}/${taskname1}/filtered-test.ini ${workdir}/${taskname1}/filtered-test \"${TRAVATAR}/script/train/filter-rule-table.py ${text}\"
     show_exec ${BIN}/travatar -config_file ${workdir}/${taskname1}/filtered-test.ini -threads ${THREADS} \< ${text} \> ${target1}
     show_exec rm -rf ${workdir}/${taskname1}
   fi
 fi
 
 target2=${workdir}/translated.${lang3}
+if [ "${testname}" ]; then
+  target2=${workdir}/translated-${testname}.${lang3}
+fi
 if [ -f ${target2} ]; then
   echo [skip] translating ${lang2} -> ${lang3}
 else
@@ -125,11 +133,17 @@ else
   if [ "$method2" == "moses" ]; then
     show_exec ${MOSES}/bin/moses -f ${ini2} -threads ${THREADS} \< ${target1} \> ${target2}
   elif [ "$method1" == "hiero" ]; then
-    show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini2} ${workdir}/${taskname2}/filtered-test.ini ${workdir}/${taskname2}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${target1}\"
+#    show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini2} ${workdir}/${taskname2}/filtered-test.ini ${workdir}/${taskname2}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${target1}\"
+    show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini2} ${workdir}/${taskname2}/filtered-test.ini ${workdir}/${taskname2}/filtered-test \"${TRAVATAR}/script/train/filter-rule-table.py ${target1}\"
     show_exec ${BIN}/travatar -config_file ${workdir}/${taskname2}/filtered-test.ini -threads ${THREADS} \< ${target1} \> ${target2}
     show_exec rm -rf ${workdir}/${taskname2}
   fi
 fi
 
-show_exec ${BIN}/mt-evaluator -ref ${ref} ${target2} \> ${workdir}/score.out
+score=${workdir}/score.out
+if [ "${testname}" ]; then
+  score=${workdir}/score-${testname}.out
+fi
+show_exec ${BIN}/mt-evaluator -ref ${ref} ${target2} \> ${score}
+head ${score}
 

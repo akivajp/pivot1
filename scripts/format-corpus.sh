@@ -163,13 +163,26 @@ show_exec mkdir -p $corpus
 show_exec head -n ${train_size} ${src1} \> $corpus/train.${lang1}
 show_exec head -n ${train_size} ${src2} \> $corpus/train.${lang2}
 
+tokenize ${lang1} train
+tokenize ${lang2} train
+train_truecaser ${lang1} train
+train_truecaser ${lang2} train
+truecase ${lang1} train
+truecase ${lang2} train
+
 if [ $opt_dev_test_size ]; then
   offset=$(expr $train_size + 1)
   size=$(expr $opt_dev_test_size \* 2)
   show_exec tail -n +${offset} ${src1} \| head -n ${size} \> ${corpus}/devtest.${lang1}
   show_exec tail -n +${offset} ${src2} \| head -n ${size} \> ${corpus}/devtest.${lang2}
-  show_exec cat ${corpus}/devtest.${lang1} \| ${dir}/interleave.py ${corpus}/{test,dev}.${lang1}
-  show_exec cat ${corpus}/devtest.${lang2} \| ${dir}/interleave.py ${corpus}/{test,dev}.${lang2}
+
+  tokenize ${lang1} devtest
+  tokenize ${lang2} devtest
+  truecase ${lang1} devtest
+  truecase ${lang2} devtest
+
+  show_exec cat ${corpus}/devtest.true.${lang1} \| ${dir}/interleave.py ${corpus}/{test,dev}.true.${lang1}
+  show_exec cat ${corpus}/devtest.true.${lang2} \| ${dir}/interleave.py ${corpus}/{test,dev}.true.${lang2}
 else
   offset=$(expr $train_size + 1)
   show_exec tail -n +${offset} ${src1} \| head -n ${test_size} \> $corpus/test.${lang1}
@@ -177,24 +190,18 @@ else
   offset=$(expr $offset + $test_size)
   show_exec tail -n +${offset} ${src1} \| head -n ${dev_size} \> ${corpus}/dev.${lang1}
   show_exec tail -n +${offset} ${src2} \| head -n ${dev_size} \> ${corpus}/dev.${lang2}
+
+  tokenize ${lang1} test
+  tokenize ${lang2} test
+  tokenize ${lang1} dev
+  tokenize ${lang2} dev
+
+  truecase ${lang1} test
+  truecase ${lang2} test
+  truecase ${lang1} dev
+  truecase ${lang2} dev
 fi
 
-tokenize ${lang1} train
-tokenize ${lang2} train
-tokenize ${lang1} test
-tokenize ${lang2} test
-tokenize ${lang1} dev
-tokenize ${lang2} dev
-
-train_truecaser ${lang1} train
-train_truecaser ${lang2} train
-
-truecase ${lang1} train
-truecase ${lang2} train
-truecase ${lang1} test
-truecase ${lang2} test
-truecase ${lang1} dev
-truecase ${lang2} dev
 
 show_exec ~/exp/moses/scripts/training/clean-corpus-n.perl $corpus/train.true ${lang1} ${lang2} $corpus/train.clean 1 ${CLEAN_LENGTH}
 
