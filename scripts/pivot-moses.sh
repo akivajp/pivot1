@@ -181,5 +181,5 @@ else
   fi
 fi
 
-echo "##### End of script: $0"
+echo "##### End of script: $0 $*"
 

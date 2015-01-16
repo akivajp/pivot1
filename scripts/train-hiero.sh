@@ -34,6 +34,9 @@ else
   task="hiero_${lang1}-${lang2}"
 fi
 
+show_exec mkdir -p ${task}
+echo "[${stamp} ${HOST}] $0 $*" >> ${task}/log
+
 if [ -f "${task}/corpus/dev.true.${lang2}" ]; then
   if [ ${#ARGS[@]} -lt 2 ]; then
     usage
@@ -121,5 +124,5 @@ else
   fi
 fi
 
-echo "End of script: $0"
+echo "End of script: $0 $*"
 

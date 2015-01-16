@@ -1,23 +1,13 @@
 #!/bin/bash
 
-KYTEA_ZH_DIC=/home/is/akiba-mi/usr/local/share/kytea/lcmc-0.4.0-1.mod
-MOSES=$HOME/exp/moses
-BIN=$HOME/usr/local/bin
-KYTEA=$BIN/kytea
-PYTHONPATH=$HOME/exp/explib-python/lib
-
-IRSTLM=~/exp/irstlm
-GIZA=~/usr/local/bin
-
 #THREADS=10
 THREADS=8
 
 #THRESHOLD="-7"
 NBEST=40
 
-dir=$(cd $(dirname $0); pwd)
-
-echo "running script with PID: $$"
+dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
+source "${dir}/common.sh"
 
 usage()
 {
@@ -26,57 +16,14 @@ usage()
   echo "options:"
   echo "  --overwrite"
   echo "  --task_name={string}"
+  echo "  --suffix{string}"
   echo "  --threads={integer}"
   echo "  --skip_pivot"
   echo "  --skip_tuning"
   echo "  --skip_test"
   echo "  --nbest={integer}"
+  echo "  --method-{counts,probs}"
 }
-
-show_exec()
-{
-  echo "[exec] $*"
-  eval $*
-
-  if [ $? -gt 0 ]
-  then
-    echo "[error on exec]: $*"
-    exit 1
-  fi
-}
-
-proc_args()
-{
-  ARGS=()
-  OPTS=()
-
-  while [ $# -gt 0 ]
-  do
-    arg=$1
-    case $arg in
-      --*=* )
-        opt=${arg#--}
-        name=${opt%=*}
-        var=${opt#*=}
-        eval "opt_${name}=${var}"
-        ;;
-      --* )
-        name=${arg#--}
-        eval "opt_${name}=1"
-        ;;
-      -* )
-        OPTS+=($arg)
-        ;;
-      * )
-        ARGS+=($arg)
-        ;;
-    esac
-
-    shift
-  done
-}
-
-proc_args $*
 
 if [ ${#ARGS[@]} -lt 3 ]
 then
@@ -101,16 +48,24 @@ else
   task="pivot_${method}_${lang1}-${lang2}-${lang3}"
 fi
 
+if [ "$opt_suffix" ]; then
+  task="${task}${opt_suffix}"
+fi
+
 if [ $opt_threads ]; then
   THREADS=$opt_threads
 fi
 
 show_exec mkdir -p ${task}
+echo "[${stamp} ${HOST}] $0 $*" >> ${task}/log
 
 corpus="${task}/corpus"
 langdir=${task}/LM_${lang3}
 workdir="${task}/working"
 transdir=${task}/TM
+
+echo "[${stamp} ${HOST}] $0 $*" >> ${workdir}/log
+
 if [ $opt_skip_pivot ]; then
   echo [skip] pivot
 elif [ ! $opt_overwrite ] && [ -f ${transdir}/model/travatar.ini ]; then
@@ -118,19 +73,21 @@ elif [ ! $opt_overwrite ] && [ -f ${transdir}/model/travatar.ini ]; then
 else
   # COPYING CORPUS
   show_exec mkdir -p ${corpus}
+  show_exec cp ${corpus_src}/devtest.true.{${lang1},${lang3}} ${corpus}
   show_exec cp ${corpus_src}/test.true.{${lang1},${lang3}} ${corpus}
   show_exec cp ${corpus_src}/dev.true.{${lang1},${lang3}} ${corpus}
-  
+
   # COPYING LM
   show_exec mkdir -p ${langdir}
   show_exec cp ${task2}/LM_${lang3}/train.blm.${lang3} ${langdir}
-  
+
+  # FILTERING
+  show_exec ${TRAVATAR}/script/train/filter-model.pl ${task1}/TM/model/travatar.ini ${workdir}/filtered-devtest/travatar.ini ${workdir}/filtered-devtest \"${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang1}\"
+
   # PIVOTING
   show_exec mkdir -p ${transdir}/model
   show_exec mkdir -p ${workdir}
-  show_exec zcat ${task1}/TM/model/rule-table.gz \> ${workdir}/rule_${lang1}-${lang2}
-  show_exec zcat ${task2}/TM/model/rule-table.gz \> ${workdir}/rule_${lang2}-${lang3}
-  options=""
+  options="--workdir ${workdir}"
   if [ "${THRESHOLD}" ]; then
     options="${options} --threshold ${THRESHOLD}"
   fi
@@ -139,11 +96,14 @@ else
   else
     options="${options} --nbest ${NBEST}"
   fi
-  show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_${lang1}-${lang2} ${workdir}/rule_${lang2}-${lang3} ${transdir}/model/rule-table.gz ${options}
+  if [ "${opt_method}" ]; then
+    options="${options} --method ${opt_method}"
+  fi
+  show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/filtered-devtest/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
   show_exec cp ${task2}/TM/model/glue-rules ${transdir}/model/
   show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/travatar.ini \> ${transdir}/model/travatar.ini
-  show_exec rm ${workdir}/rule_${lang1}-${lang2} ${workdir}/rule_${lang1}-${lang2}.index
-  show_exec rm ${workdir}/rule_${lang2}-${lang3} ${workdir}/rule_${lang2}-${lang3}.index
+  show_exec rm -rf ${workdir}/filtered-devtest
+  show_exec rm -rf ${workdir}/pivot
 fi
 
 tunedir=${task}/tuned
@@ -153,7 +113,7 @@ if [ ! ${opt_overwrite} ] && [ -f ${tunedir}/travatar.ini ]; then
 elif [ $opt_skip_tuning ]; then
   echo [skip] tuning
 else
-  show_exec ${dir}/tune-travatar.sh ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang3} ${transdir}/model/travatar.ini ${task} --threads=${THREADS}
+  show_exec ${dir}/tune-travatar.sh ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang3} ${transdir}/model/travatar.ini ${task} --threads=${THREADS} --format=word
   show_exec mkdir -p ${tunedir}
   show_exec cp ${workdir}/mert-work/travatar.ini ${tunedir}
   show_exec rm -rf ${workdir}/mert-work/filtered
@@ -175,5 +135,5 @@ else
   fi
 fi
 
-echo "##### End of script: $0"
+echo "##### End of script: $0 $*"
 

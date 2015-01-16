@@ -14,6 +14,7 @@ BIN=$HOME/usr/local/bin
 THREADS=4
 
 dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
+stamp=$(date +"%Y/%m/%d %H:%M:%S")
 
 #echo "running script with PID: $$"
 

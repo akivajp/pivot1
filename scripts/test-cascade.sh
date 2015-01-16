@@ -147,3 +147,5 @@ fi
 show_exec ${BIN}/mt-evaluator -ref ${ref} ${target2} \> ${score}
 head ${score}
 
+echo "End of script: $0 $*"
+
