@@ -56,6 +56,10 @@ if [ $opt_threads ]; then
   THREADS=$opt_threads
 fi
 
+if [ "${opt_method}" ]; then
+  METHOD="${opt_method}"
+fi
+
 show_exec mkdir -p ${task}
 echo "[${stamp} ${HOST}] $0 $*" >> ${task}/log
 
@@ -63,8 +67,6 @@ corpus="${task}/corpus"
 langdir=${task}/LM_${lang3}
 workdir="${task}/working"
 transdir=${task}/TM
-
-echo "[${stamp} ${HOST}] $0 $*" >> ${workdir}/log
 
 if [ $opt_skip_pivot ]; then
   echo [skip] pivot
@@ -82,11 +84,25 @@ else
   show_exec cp ${task2}/LM_${lang3}/train.blm.${lang3} ${langdir}
 
   # FILTERING
+  ${dir}/wait-file.sh ${task1}/TM/model/travatar.ini
   show_exec ${TRAVATAR}/script/train/filter-model.pl ${task1}/TM/model/travatar.ini ${workdir}/filtered-devtest/travatar.ini ${workdir}/filtered-devtest \"${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang1}\"
 
+  if [ "${METHOD}" == "counts" ]; then
+    lexfile="${transdir}/model/lex_${lang1}-${lang3}"
+    if [ -f "${lexfile}" ]; then
+      echo [skip] calc lex probs
+    else
+      # 共起回数ピボットの場合、事前に語彙翻訳確率の算出が必要
+      show_exec mkdir -p ${transdir}/model
+      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/align2lex.py ${task1}/corpus/train.clean.{$lang1,$lang2} ${task1}/TM/align/align.txt ${workdir}/lex_${lang1}-${lang2}
+      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/align2lex.py ${task2}/corpus/train.clean.{$lang2,$lang3} ${task2}/TM/align/align.txt ${workdir}/lex_${lang2}-${lang3}
+      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/pivot_lex.py ${workdir}/lex_${lang1}-${lang2} ${workdir}/lex_${lang2}-${lang3} ${lexfile}
+    fi
+  fi
   # PIVOTING
   show_exec mkdir -p ${transdir}/model
   show_exec mkdir -p ${workdir}
+  ${dir}/wait-file.sh ${task2}/TM/model/travatar.ini
   options="--workdir ${workdir}"
   if [ "${THRESHOLD}" ]; then
     options="${options} --threshold ${THRESHOLD}"
@@ -96,8 +112,9 @@ else
   else
     options="${options} --nbest ${NBEST}"
   fi
-  if [ "${opt_method}" ]; then
-    options="${options} --method ${opt_method}"
+  options="${options} --method ${METHOD}"
+  if [ "${METHOD}" == "counts" ]; then
+    options="${options} --lexfile ${lexfile}"
   fi
   show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/filtered-devtest/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
   show_exec cp ${task2}/TM/model/glue-rules ${transdir}/model/
@@ -134,6 +151,8 @@ else
     show_exec ${dir}/test-travatar.sh ${task} ${workdir}/mert-work/travatar.ini ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang3} dev --threads=${THREADS}
   fi
 fi
+
+head ${workdir}/score*
 
 echo "##### End of script: $0 $*"
 

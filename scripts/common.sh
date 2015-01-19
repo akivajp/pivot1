@@ -10,6 +10,16 @@ GIZA=~/usr/local/bin
 TRAVATAR=$HOME/exp/travatar
 BIN=$HOME/usr/local/bin
 
+MOSES=$HOME/exp/moses
+BIN=$HOME/usr/local/bin
+KYTEA=$BIN/kytea
+PYTHONPATH=$HOME/exp/explib-python/lib
+
+IRSTLM=~/exp/irstlm
+GIZA=~/usr/local/bin
+
+ORDER=5
+
 #THREADS=10
 THREADS=4
 

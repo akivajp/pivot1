@@ -1,21 +1,25 @@
 #!/bin/bash
 
-KYTEA_ZH_DIC=/home/is/akiba-mi/usr/local/share/kytea/lcmc-0.4.0-1.mod
-MOSES=$HOME/exp/moses
-BIN=$HOME/usr/local/bin
-KYTEA=$BIN/kytea
-PYTHONPATH=$HOME/exp/explib-python/lib
-
-IRSTLM=~/exp/irstlm
-GIZA=~/usr/local/bin
+#KYTEA_ZH_DIC=/home/is/akiba-mi/usr/local/share/kytea/lcmc-0.4.0-1.mod
+#MOSES=$HOME/exp/moses
+#BIN=$HOME/usr/local/bin
+#KYTEA=$BIN/kytea
+#PYTHONPATH=$HOME/exp/explib-python/lib
+#
+#IRSTLM=~/exp/irstlm
+#GIZA=~/usr/local/bin
 
 #THREADS=10
 THREADS=8
 
-#THRESHOLD="1e-2"
+#THRESHOLD="1e-3"
 NBEST=30
 
-dir=$(cd $(dirname $0); pwd)
+METHOD="counts"
+
+dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
+source "${dir}/common.sh"
+
 
 echo "running script with PID: $$"
 
@@ -26,58 +30,14 @@ usage()
   echo "options:"
   echo "  --overwrite"
   echo "  --task_name={string}"
+  echo "  --suffix{string}"
   echo "  --threads={integer}"
-#  echo "  --on_memory"
   echo "  --skip_pivot"
   echo "  --skip_tuning"
   echo "  --skip_test"
   echo "  --nbest={integer}"
+  echo "  --method-{counts,probs}"
 }
-
-show_exec()
-{
-  echo "[exec] $*"
-  eval $*
-
-  if [ $? -gt 0 ]
-  then
-    echo "[error on exec]: $*"
-    exit 1
-  fi
-}
-
-proc_args()
-{
-  ARGS=()
-  OPTS=()
-
-  while [ $# -gt 0 ]
-  do
-    arg=$1
-    case $arg in
-      --*=* )
-        opt=${arg#--}
-        name=${opt%=*}
-        var=${opt#*=}
-        eval "opt_${name}=${var}"
-        ;;
-      --* )
-        name=${arg#--}
-        eval "opt_${name}=1"
-        ;;
-      -* )
-        OPTS+=($arg)
-        ;;
-      * )
-        ARGS+=($arg)
-        ;;
-    esac
-
-    shift
-  done
-}
-
-proc_args $*
 
 if [ ${#ARGS[@]} -lt 3 ]
 then
@@ -101,16 +61,27 @@ else
   task="pivot_moses_${lang1}-${lang2}-${lang3}"
 fi
 
+if [ "$opt_suffix" ]; then
+  task="${task}${opt_suffix}"
+fi
+
 if [ ${opt_threads} ]; then
   THREADS=${opt_threads}
 fi
 
+if [ "${opt_method}" ]; then
+  METHOD="${opt_method}"
+fi
+
 show_exec mkdir -p ${task}
+echo "[${stamp} ${HOST}] $0 $*" >> ${task}/log
 
 corpus="${task}/corpus"
 langdir=${task}/LM_${lang3}
 workdir="${task}/working"
 transdir=${task}/TM
+show_exec mkdir -p ${workdir}
+
 if [ $opt_skip_pivot ]; then
   echo [skip] pivot
 elif [ ! $opt_overwrite ] && [ -f ${transdir}/model/moses.ini ]; then
@@ -118,19 +89,31 @@ elif [ ! $opt_overwrite ] && [ -f ${transdir}/model/moses.ini ]; then
 else
   # COPYING CORPUS
   show_exec mkdir -p ${corpus}
+  show_exec cp ${corpus_src}/devtest.true.{${lang1},${lang3}} ${corpus}
   show_exec cp ${corpus_src}/test.true.{${lang1},${lang3}} ${corpus}
   show_exec cp ${corpus_src}/dev.true.{${lang1},${lang3}} ${corpus}
-  
+
   # COPYING LM
   show_exec mkdir -p ${langdir}
   show_exec cp ${task2}/LM_${lang3}/train.blm.${lang3} ${langdir}
-  
+
+  if [ "${METHOD}" == "counts" ]; then
+    lexfile="${transdir}/model/lex_${lang1}-${lang3}"
+    if [ -f "${lexfile}" ]; then
+      echo [skip] calc lex probs
+    else
+      # 共起回数ピボットの場合、事前に語彙翻訳確率の算出が必要
+      show_exec mkdir -p ${transdir}/model
+      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/align2lex.py ${task1}/corpus/train.clean.{$lang1,$lang2} ${task1}/TM/model/aligned.grow-diag-final-and ${workdir}/lex_${lang1}-${lang2}
+      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/align2lex.py ${task2}/corpus/train.clean.{$lang2,$lang3} ${task2}/TM/model/aligned.grow-diag-final-and ${workdir}/lex_${lang2}-${lang3}
+      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/pivot_lex.py ${workdir}/lex_${lang1}-${lang2} ${workdir}/lex_${lang2}-${lang3} ${lexfile}
+    fi
+  fi
   # PIVOTING
   show_exec mkdir -p ${transdir}/model
-  show_exec mkdir -p ${workdir}
-  show_exec zcat ${task1}/TM/model/phrase-table.gz \> ${workdir}/phrase_${lang1}-${lang2}
-  show_exec zcat ${task2}/TM/model/phrase-table.gz \> ${workdir}/phrase_${lang2}-${lang3}
-  options=""
+  ${dir}/wait-file.sh ${task1}/TM/model/moses.ini
+  ${dir}/wait-file.sh ${task2}/TM/model/moses.ini
+  options="--workdir ${workdir}"
   if [ "${THRESHOLD}" ]; then
     options="${options} --threshold ${THRESHOLD}"
   fi
@@ -139,15 +122,20 @@ else
   else
     options="${options} --nbest ${NBEST}"
   fi
-  show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/triangulate.py ${workdir}/phrase_${lang1}-${lang2} ${workdir}/phrase_${lang2}-${lang3} ${transdir}/model/phrase-table.gz ${options}
+  options="${options} --method ${METHOD}"
+  if [ "${METHOD}" == "counts" ]; then
+    options="${options} --lexfile ${lexfile}"
+  fi
+  show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/triangulate.py ${task1}/TM/model/phrase-table.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz ${options}
   show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/moses.ini \> ${transdir}/model/moses.ini
-  show_exec rm ${workdir}/phrase_${lang1}-${lang2} ${workdir}/phrase_${lang1}-${lang2}.index
-  show_exec rm ${workdir}/phrase_${lang2}-${lang3} ${workdir}/phrase_${lang2}-${lang3}.index
+  show_exec rm -rf ${workdir}/pivot
 fi
 
 bindir=${task}/binmodel
 # -- TUNING --
-if [ $opt_skip_tuning ]; then
+if [ ! $opt_overwrite ] && [ -f ${bindir}/moses.ini ]; then
+  echo [autoskip] tuning
+elif [ $opt_skip_tuning ]; then
   echo [skip] tuning
 else
 #if [ $opt_tuning ]; then
@@ -180,6 +168,8 @@ else
     show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang3} dev --threads=${THREADS}
   fi
 fi
+
+head ${workdir}/score*
 
 echo "##### End of script: $0 $*"
 

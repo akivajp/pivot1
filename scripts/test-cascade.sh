@@ -83,10 +83,12 @@ lang3=$(expr $taskname2 : ".*_..-\(..\)" )
 ini1=${taskdir1}/binmodel/moses.ini
 ini2=${taskdir2}/binmodel/moses.ini
 if [ "$method1" == "hiero" ]; then
-  ini1=${taskdir1}/working/mert-work/travatar.ini
+#  ini1=${taskdir1}/working/mert-work/travatar.ini
+  ini1=${taskdir1}/tuned/travatar.ini
 fi
 if [ "$method2" == "hiero" ]; then
-  ini2=${taskdir2}/working/mert-work/travatar.ini
+#  ini2=${taskdir2}/working/mert-work/travatar.ini
+  ini2=${taskdir2}/tuned/travatar.ini
 fi
 
 echo METHOD1: $method1
@@ -147,5 +149,5 @@ fi
 show_exec ${BIN}/mt-evaluator -ref ${ref} ${target2} \> ${score}
 head ${score}
 
-echo "End of script: $0 $*"
+echo "##### End of script: $0 $*"
 

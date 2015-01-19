@@ -34,9 +34,6 @@ else
   task="hiero_${lang1}-${lang2}"
 fi
 
-show_exec mkdir -p ${task}
-echo "[${stamp} ${HOST}] $0 $*" >> ${task}/log
-
 if [ -f "${task}/corpus/dev.true.${lang2}" ]; then
   if [ ${#ARGS[@]} -lt 2 ]; then
     usage
@@ -46,6 +43,9 @@ elif [ ${#ARGS[@]} -lt 4 ]; then
   usage
   exit 1
 fi
+
+show_exec mkdir -p ${task}
+echo "[${stamp} ${HOST}] $0 $*" >> ${task}/log
 
 if [ ${opt_threads} ]; then
   THREADS=${opt_threads}
@@ -108,7 +108,8 @@ else
   show_exec ${dir}/tune-travatar.sh ${orig}/${corpus}/dev.true.${lang1} ${orig}/${corpus}/dev.true.${lang2} ${orig}/${transdir}/model/travatar.ini ${task} --threads=${THREADS} --format=word
   show_exec mkdir -p ${tunedir}
   show_exec cp ${workdir}/mert-work/travatar.ini ${tunedir}
-  show_exec rm -rf ${workdir}/mert-work/filtered
+#  show_exec rm -rf ${workdir}/mert-work/filtered
+  show_exec rm -rf ${workdir}/mert-work
 fi
 
 if [ -f ${workdir}/score-dev.out ]; then
@@ -124,5 +125,7 @@ else
   fi
 fi
 
-echo "End of script: $0 $*"
+head ${workdir}/score*
+
+echo "##### End of script: $0 $*"
 

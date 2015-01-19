@@ -1,19 +1,21 @@
 #!/bin/bash
 
-KYTEA_ZH_DIC=/home/is/akiba-mi/usr/local/share/kytea/lcmc-0.4.0-1.mod
-MOSES=$HOME/exp/moses
-BIN=$HOME/usr/local/bin
-KYTEA=$BIN/kytea
+#KYTEA_ZH_DIC=/home/is/akiba-mi/usr/local/share/kytea/lcmc-0.4.0-1.mod
+#MOSES=$HOME/exp/moses
+#BIN=$HOME/usr/local/bin
+#KYTEA=$BIN/kytea
+#
+#IRSTLM=~/exp/irstlm
+#GIZA=~/usr/local/bin
+#
+##THREADS=10
+#THREADS=4
+#
+#ORDER=5
+#
 
-IRSTLM=~/exp/irstlm
-GIZA=~/usr/local/bin
-
-#THREADS=10
-THREADS=4
-
-ORDER=5
-
-dir=$(cd $(dirname $0); pwd)
+dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
+source "${dir}/common.sh"
 
 echo "running script with PID: $$"
 
@@ -36,51 +38,6 @@ usage()
   echo "  --skip_test"
   echo "  --overwrite"
 }
-
-show_exec()
-{
-  echo "[exec] $*"
-  eval $*
-
-  if [ $? -gt 0 ]
-  then
-    echo "[error on exec]: $*"
-    exit 1
-  fi
-}
-
-proc_args()
-{
-  ARGS=()
-  OPTS=()
-
-  while [ $# -gt 0 ]
-  do
-    arg=$1
-    case $arg in
-      --*=* )
-        opt=${arg#--}
-        name=${opt%=*}
-        var=${opt#*=}
-        eval "opt_${name}=${var}"
-        ;;
-      --* )
-        name=${arg#--}
-        eval "opt_${name}=1"
-        ;;
-      -* )
-        OPTS+=($arg)
-        ;;
-      * )
-        ARGS+=($arg)
-        ;;
-    esac
-
-    shift
-  done
-}
-
-proc_args $*
 
 lang1=${ARGS[0]}
 lang2=${ARGS[1]}
@@ -106,6 +63,9 @@ fi
 if [ ${opt_threads} ]; then
   THREADS=${opt_threads}
 fi
+
+show_exec mkdir -p ${task}
+echo "[${stamp} ${HOST}] $0 $*" >> ${task}/log
 
 corpus="${task}/corpus"
 langdir="${task}/LM_${lang2}"
@@ -196,6 +156,8 @@ else
     show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/dev.true.${lang1} ${corpus}/dev.true.${lang2} dev --threads=${THREADS}
   fi
 fi
+
+head ${workdir}/score*
 
 echo "##### End of script: $0 $*"
 
