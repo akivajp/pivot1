@@ -25,7 +25,8 @@ parse()
   input=$2
   output=$3
   lines=$(wc -l $input | cut -d' ' -f1)
-  d=$(expr $lines / $THREADS + 1)
+#  d=$(expr $lines / $THREADS + 1)
+  d=$(expr \( $lines + ${THREADS} - 1 \) / ${THREADS} )
   base=$(basename $input)
   show_exec mkdir -p ${corpus}/tmp
   show_exec split -l ${d} ${input} ${corpus}/tmp/${base}.
@@ -33,15 +34,37 @@ parse()
   show_exec cat ${corpus}/tmp/${base}.\*.parsed \> ${output}
 }
 
-if [ -f "${corpus}/train.true.en" ]; then
-  parse ${CKYLARK}/model/wsj ${corpus}/train.true.en ${corpus}/train.tree.en
-  parse ${CKYLARK}/model/wsj ${corpus}/test.true.en  ${corpus}/test.tree.en
-  parse ${CKYLARK}/model/wsj ${corpus}/dev.true.en   ${corpus}/dev.tree.en
-fi
+##if [ -f "${corpus}/train.true.en" ]; then
+#if [ -f "${corpus}/train.clean.en" ]; then
+#  parse ${CKYLARK}/model/wsj ${corpus}/train.clean.en ${corpus}/train.tree.en
+#  parse ${CKYLARK}/model/wsj ${corpus}/test.true.en  ${corpus}/test.tree.en
+#  parse ${CKYLARK}/model/wsj ${corpus}/dev.true.en   ${corpus}/dev.tree.en
+#fi
+#
+##if [ -f "${corpus}/train.true.ja" ]; then
+#if [ -f "${corpus}/train.clean.ja" ]; then
+#  parse ${CKYLARK}/model/jdc ${corpus}/train.clean.ja ${corpus}/train.tree.ja
+#  parse ${CKYLARK}/model/jdc ${corpus}/test.true.ja  ${corpus}/test.tree.ja
+#  parse ${CKYLARK}/model/jdc ${corpus}/dev.true.ja   ${corpus}/dev.tree.ja
+#fi
 
-if [ -f "${corpus}/train.true.ja" ]; then
-  parse ${CKYLARK}/model/jdc ${corpus}/train.true.ja ${corpus}/train.tree.ja
-  parse ${CKYLARK}/model/jdc ${corpus}/test.true.ja  ${corpus}/test.tree.ja
-  parse ${CKYLARK}/model/jdc ${corpus}/dev.true.ja   ${corpus}/dev.tree.ja
-fi
+for lang in en ja; do
+  case ${lang} in
+    en)
+      model=${CKYLARK}/model/wsj
+      ;;
+    ja)
+      model=${CKYLARK}/model/jdc
+      ;;
+    *)
+      echo "cannot solve parsing model"
+      exit 1
+      ;;
+  esac
+  if [ -f "${corpus}/train.clean.${lang}" ]; then
+    parse ${model} ${corpus}/train.clean.${lang} ${corpus}/train.tree.${lang}
+    parse ${model} ${corpus}/test.true.${lang}   ${corpus}/test.tree.${lang}
+    parse ${model} ${corpus}/dev.true.${lang}    ${corpus}/dev.tree.${lang}
+  fi
+done
 

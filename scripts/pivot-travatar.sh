@@ -4,7 +4,8 @@
 THREADS=8
 
 #THRESHOLD="-7"
-NBEST=40
+#NBEST=40
+NBEST=20
 
 dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
 source "${dir}/common.sh"
@@ -67,7 +68,10 @@ corpus="${task}/corpus"
 langdir=${task}/LM_${lang3}
 workdir="${task}/working"
 transdir=${task}/TM
+show_exec mkdir -p ${workdir}
 
+${dir}/wait-file.sh ${task1}/TM/model/travatar.ini
+${dir}/wait-file.sh ${task2}/TM/model/travatar.ini
 if [ $opt_skip_pivot ]; then
   echo [skip] pivot
 elif [ ! $opt_overwrite ] && [ -f ${transdir}/model/travatar.ini ]; then
@@ -83,8 +87,7 @@ else
   show_exec mkdir -p ${langdir}
   show_exec cp ${task2}/LM_${lang3}/train.blm.${lang3} ${langdir}
 
-  # FILTERING
-  ${dir}/wait-file.sh ${task1}/TM/model/travatar.ini
+#  # FILTERING
   show_exec ${TRAVATAR}/script/train/filter-model.pl ${task1}/TM/model/travatar.ini ${workdir}/filtered-devtest/travatar.ini ${workdir}/filtered-devtest \"${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang1}\"
 
   if [ "${METHOD}" == "counts" ]; then
@@ -117,6 +120,7 @@ else
     options="${options} --lexfile ${lexfile}"
   fi
   show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/filtered-devtest/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+#  show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${task1}/TM/model/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
   show_exec cp ${task2}/TM/model/glue-rules ${transdir}/model/
   show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/travatar.ini \> ${transdir}/model/travatar.ini
   show_exec rm -rf ${workdir}/filtered-devtest

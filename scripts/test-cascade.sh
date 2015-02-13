@@ -1,12 +1,7 @@
 #!/bin/bash
 
-MOSES=$HOME/exp/moses
-TRAVATAR=$HOME/exp/travatar
-BIN=$HOME/usr/local/bin
-dir=$(cd $(dirname $0); pwd)
-
-#THREADS=10
-THREADS=8
+dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
+source "${dir}/common.sh"
 
 usage()
 {
@@ -16,55 +11,10 @@ usage()
   echo "  --threads={integer}"
 }
 
-show_exec()
-{
-  echo "[exec] $*"
-  eval $*
-
-  if [ $? -gt 0 ]
-  then
-    echo "[error on exec]: $*"
-    exit 1
-  fi
-}
-
-proc_args()
-{
-  ARGS=()
-  OPTS=()
-
-  while [ $# -gt 0 ]
-  do
-    arg=$1
-    case $arg in
-      --*=* )
-        opt=${arg#--}
-        name=${opt%=*}
-        var=${opt#*=}
-        eval "opt_${name}=${var}"
-        ;;
-      -* )
-        OPTS+=($arg)
-        ;;
-      * )
-        ARGS+=($arg)
-        ;;
-    esac
-
-    shift
-  done
-}
-
-proc_args $*
-
 if [ ${#ARGS[@]} -lt 4 ]
 then
   usage
   exit 1
-fi
-
-if [ ${opt_threads} ]; then
-  THREADS=${opt_threads}
 fi
 
 taskdir1=${ARGS[0]}
@@ -114,7 +64,8 @@ if [ -f ${target1} ]; then
 else
   show_exec mkdir -p ${workdir}
   ${dir}/wait-file.sh ${ini1}
-  if [ "$method1" == "moses" ]; then
+#  if [ "$method1" == "moses" ]; then
+  if [ "$method1" == "pbmt" ]; then
     show_exec ${MOSES}/bin/moses -f ${ini1} -threads ${THREADS} \< ${text} \> ${target1}
   elif [ "$method1" == "hiero" ]; then
 #    show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini1} ${workdir}/${taskname1}/filtered-test.ini ${workdir}/${taskname1}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${text}\"
@@ -132,7 +83,8 @@ if [ -f ${target2} ]; then
   echo [skip] translating ${lang2} -> ${lang3}
 else
   ${dir}/wait-file.sh ${ini2}
-  if [ "$method2" == "moses" ]; then
+#  if [ "$method2" == "moses" ]; then
+  if [ "$method2" == "pbmt" ]; then
     show_exec ${MOSES}/bin/moses -f ${ini2} -threads ${THREADS} \< ${target1} \> ${target2}
   elif [ "$method1" == "hiero" ]; then
 #    show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini2} ${workdir}/${taskname2}/filtered-test.ini ${workdir}/${taskname2}/filtered-test \"${TRAVATAR}/script/train/filter-rt.pl -src ${target1}\"

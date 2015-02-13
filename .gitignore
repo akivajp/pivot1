@@ -6,4 +6,5 @@ running.pid
 raw
 un
 __pycache__
+.*.swp
 
