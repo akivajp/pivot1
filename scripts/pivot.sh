@@ -22,6 +22,7 @@ usage()
   echo "  --lexmethod={count,prod}"
   echo "  --noprefilter"
   echo "  --nulls={int}"
+  echo "  --multitarget"
 }
 
 if [ ${#ARGS[@]} -lt 3 ]
@@ -89,7 +90,8 @@ filterdir="${workdir}/filtered"
 show_exec mkdir -p ${workdir}
 
 show_exec mkdir -p ${task}
-echo "[${stamp} ${HOST}] $0 $*" >> ${task}/log
+LOG=${task}/log
+echo "[${stamp} ${HOST}] $0 $*" >> ${LOG}
 
 case ${mt_method} in
   pbmt)
@@ -130,6 +132,10 @@ if [ "${opt_nbest}" ]; then
   NBEST="${opt_nbest}"
 fi
 
+if [ $(expr ${opt_method} : '.*\(multi\)') ]; then
+  multitarget=true
+fi
+
 if [ -f ${plain_ini} ]; then
   echo [autoskip] pivot
 else
@@ -140,19 +146,23 @@ else
   show_exec cp ${corpus_src}/dev.true.{$lang_src,$lang_trg} ${corpus}
 
   # COPYING LM
-  show_exec mkdir -p ${langdir}
-  show_exec cp ${task2}/LM_${lang_trg}/train.blm.${lang_trg} ${langdir}
+  show_exec cp -rf ${task2}/LM_${lang_trg} ${task}
+#  show_exec mkdir -p ${langdir}
+#  show_exec cp ${task2}/LM_${lang_trg}/train.blm.${lang_trg} ${langdir}
 
-  if [ "${mt_method}" == "t2s" ]; then
+  if [ "${mt_method}" == "pbmt" ]; then
+    show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task1}/TM/model/moses.ini ${corpus_src}/devtest.true.${lang_src}
+    show_exec mv ${workdir}/filtered/phrase-table*.gz ${workdir}/phrase_filtered.gz
+    show_exec rm -rf ${workdir}/filtered
+  elif [ "${mt_method}" == "t2s" ]; then
     # REVERSING
     show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/reverse.py ${task1}/TM/model/rule-table.gz ${workdir}/rule_s2t
 #    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \| gzip \> ${workdir}/rule_filtered.gz
     show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
   elif [ "${mt_method}" == "hiero" ]; then
     # FILTERING
-#    show_exec ${TRAVATAR}/script/train/filter-model.pl ${task1}/TM/model/travatar.ini ${workdir}/filtered-devtest/travatar.ini ${workdir}/filtered-devtest \"${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src}\"
-#    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \| gzip \> ${workdir}/rule_filtered.gz
-    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
+#    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
+    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered
   fi
 
   if [ "${LEX_METHOD}" != "prodweight" ] && [ "${LEX_METHOD}" != "table" ]; then
@@ -193,14 +203,19 @@ else
     options="${options} --noprefilter=True"
   fi
   if [ "${mt_method}" == "pbmt" ]; then
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/triangulate.py ${task1}/TM/model/phrase-table.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz ${options}
+#    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/triangulate.py ${task1}/TM/model/phrase-table.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz ${options}
+    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/triangulate.py ${workdir}/phrase_filtered.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz ${options}
     show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/moses.ini \> ${plain_ini}
+    rm ${workdir}/phrase_filtered.gz
   elif [ "${mt_method}" == "hiero" ]; then
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+#    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
     show_exec cp ${task2}/TM/model/glue-rules ${transdir}/model/
     show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/travatar.ini \> ${plain_ini}
+    rm ${workdir}/rule_filtered ${workdir}/rule_filtered.index
   elif [ "${mt_method}" == "t2s" ]; then
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+#    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
     show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/travatar.ini \> ${plain_ini}
   fi
   if [ -f ${workdir}/pivot/table.lex ]; then
@@ -208,6 +223,49 @@ else
   fi
   if [ -f ${workdir}/pivot/combined.lex ]; then
     show_exec cp ${workdir}/pivot/combined.lex ${transdir}/model/
+  fi
+  if [ "${multitarget}" ]; then
+    show_exec cp -rf ${task1}/LM_${lang_pvt} ${task}
+
+    echo "x0:X @ S ||| x0:X @ S |COL| x0:X @ S ||| " > ${transdir}/model/glue-rules
+    echo "x0:S x1:X @ S ||| x0:S x1:X @ S |COL| x0:S x1:X @ S ||| glue=1" >> ${transdir}/model/glue-rules
+
+    echo "[tm_file]" > ${transdir}/model/travatar.ini
+    echo $(abspath ${transdir}/model/rule-table.gz) >> ${transdir}/model/travatar.ini
+    echo $(abspath ${transdir}/model/glue-rules) >> ${transdir}/model/travatar.ini
+    echo "" >> ${transdir}/model/travatar.ini
+    echo "[lm_file]" >> ${transdir}/model/travatar.ini
+    echo "$(abspath ${task}/LM_${lang_trg}/train.blm.${lang_trg})|factor=0,lm_feat=0lm,lm_unk_feat=0lmunk" >> ${transdir}/model/travatar.ini
+    echo "$(abspath ${task}/LM_${lang_pvt}/train.blm.${lang_pvt})|factor=1,lm_feat=1lm,lm_unk_feat=1lmunk" >> ${transdir}/model/travatar.ini
+#    echo $(abspath ${task}/LM_${lang_trg}/train.blm.${lang_trg})|factor=0,lm_feat=0lm,lm_unk_feat=0lmunk >> ${transdir}/model/travatar.ini
+#    echo $(abspath ${task}/LM_${lang_pvt}/train.blm.${lang_pvt})|factor=0,lm_feat=0lm,lm_unk_feat=0lmunk >> ${transdir}/model/travatar.ini
+    echo "" >> ${transdir}/model/travatar.ini
+    echo "[in_format]" >> ${transdir}/model/travatar.ini
+    echo "word" >> ${transdir}/model/travatar.ini
+    echo "" >> ${transdir}/model/travatar.ini
+    echo "[tm_storage]" >> ${transdir}/model/travatar.ini
+    echo "fsm" >> ${transdir}/model/travatar.ini
+    echo "" >> ${transdir}/model/travatar.ini
+    echo "[search]" >> ${transdir}/model/travatar.ini
+    echo "cp" >> ${transdir}/model/travatar.ini
+    echo "" >> ${transdir}/model/travatar.ini
+    echo "[trg_factors]" >> ${transdir}/model/travatar.ini
+    echo "2" >> ${transdir}/model/travatar.ini
+    echo "" >> ${transdir}/model/travatar.ini
+    echo "[hiero_span_limit]" >> ${transdir}/model/travatar.ini
+    echo "20" >> ${transdir}/model/travatar.ini
+    echo "1000" >> ${transdir}/model/travatar.ini
+    echo "" >> ${transdir}/model/travatar.ini
+    echo "[weight_vals]" >> ${transdir}/model/travatar.ini
+    echo "0egfp=0.05" >> ${transdir}/model/travatar.ini
+    echo "0egfl=0.05" >> ${transdir}/model/travatar.ini
+    echo "0fgep=0.05" >> ${transdir}/model/travatar.ini
+    echo "0fgel=0.05" >> ${transdir}/model/travatar.ini
+    echo "0lm=0.3" >> ${transdir}/model/travatar.ini
+    echo "0w=0.3" >> ${transdir}/model/travatar.ini
+    echo "p=-0.15" >> ${transdir}/model/travatar.ini
+    echo "unk=1" >> ${transdir}/model/travatar.ini
+    echo "lfreq=0.05" >> ${transdir}/model/travatar.ini
   fi
   show_exec rm -rf ${workdir}/pivot
 fi
@@ -260,7 +318,7 @@ else
 fi
 
 #show_exec rm -rf ${workdir}/filtered
-head ${workdir}/score*
+head ${workdir}/score* | tee -a ${LOG}
 
-echo "##### End of script: $0 $*"
+echo "##### End of script: $0 $*" | tee -a ${LOG}
 

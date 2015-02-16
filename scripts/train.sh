@@ -157,9 +157,7 @@ fi
 if [ -f ${workdir}/score-plain.out ]; then
   echo [autoskip] testing plain
 else
-#  show_exec ${dir}/filter.sh ${mt_method} ${plain_ini} ${corpus}/test.true.${lang1} ${workdir}/filtered
   show_exec ${dir}/filter.sh ${mt_method} ${plain_ini} ${src_test} ${workdir}/filtered
-#  show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${corpus}/test.true.{$lang1,$lang2} plain --threads=${THREADS}
   show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_test} ${trg_test} plain --threads=${THREADS}
 fi
 

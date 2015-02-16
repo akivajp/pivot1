@@ -9,15 +9,17 @@ source ${dir}/config.sh
 
 show_exec()
 {
-  echo "[exec] $*"
+#  echo "[exec] $*" | tee -a ${LOG}
+  echo "[exec ${stamp} on ${HOST}] $*" | tee -a ${LOG}
   eval $*
 
   if [ $? -gt 0 ]
   then
 #    echo "[error on exec]: $*"
     local red=31
-    local msg="[error on exec]: $*"
-    echo -e "\033[${red}m${msg}\033[m"
+#    local msg="[error on exec]: $*"
+    local msg="[error ${stamp} on ${HOST}]: $*"
+    echo -e "\033[${red}m${msg}\033[m" | tee -a ${LOG}
     exit 1
   fi
 }
@@ -80,7 +82,7 @@ get_mt_method()
 {
   local taskname=$1
   local mt_method=$(expr $taskname : '.*_\(.*\)_..-')
-  if [ ! "mt_method" ]; then
+  if [ ! "${mt_method}" ]; then
     mt_method=$(expr $taskname : '\(.*\)_..-')
   fi
   echo ${mt_method}
