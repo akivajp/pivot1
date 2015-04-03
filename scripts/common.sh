@@ -5,19 +5,14 @@ stamp=$(date +"%Y/%m/%d %H:%M:%S")
 
 source ${dir}/config.sh
 
-#echo "running script with PID: $$"
-
 show_exec()
 {
-#  echo "[exec] $*" | tee -a ${LOG}
   echo "[exec ${stamp} on ${HOST}] $*" | tee -a ${LOG}
   eval $*
 
   if [ $? -gt 0 ]
   then
-#    echo "[error on exec]: $*"
     local red=31
-#    local msg="[error on exec]: $*"
     local msg="[error ${stamp} on ${HOST}]: $*"
     echo -e "\033[${red}m${msg}\033[m" | tee -a ${LOG}
     exit 1
@@ -58,6 +53,29 @@ proc_args()
 abspath()
 {
   echo $(cd $(dirname $1) && pwd)/$(basename $1)
+}
+
+ask_continue()
+{
+  local testfile=$1
+  local REP=""
+  if [ "${testfile}" ]; then
+    if [ ! -e ${testfile} ]; then
+      return
+    else
+      echo -n "\"${testfile}\" is found. do you want to continue? [y/n]: "
+    fi
+  else
+    echo -n "do you want to continue? [y/n]: "
+  fi
+  while [ 1 ]; do
+    read REP
+    case $REP in
+      y*|Y*) break ;;
+      n*|N*) exit ;;
+      *) echo -n "type y or n: " ;;
+    esac
+  done
 }
 
 proc_args $*

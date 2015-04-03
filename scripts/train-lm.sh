@@ -1,62 +1,18 @@
 #!/bin/bash
 
-#MOSES=/home/is/akiba-mi/exp/moses
-#IRSTLM=~/exp/irstlm
-#LMPLZ=$HOME/usr/local/bin/lmplz
-BIN=$HOME/usr/local/bin
-
-dir=$(cd $(dirname $0); pwd)
-
 ORDER=5
+
+dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
+source "${dir}/common.sh"
 
 usage()
 {
-  echo "usage: $0 lang_id src_corpus"
+  echo "usage: $0 lang_id src_corpus [size] [name]"
 
   echo "options:"
   echo "  --task_name={string}"
+  echo "  --here"
 }
-
-show_exec()
-{
-  echo "[exec] $*"
-  eval $*
-
-  if [ $? -gt 0 ]
-  then
-    echo "[error on exec]: $*"
-    exit 1
-  fi
-}
-
-proc_args()
-{
-  ARGS=()
-  OPTS=()
-
-  while [ $# -gt 0 ]
-  do
-    arg=$1
-    case $arg in
-      --*=* )
-        opt=${arg#--}
-        name=${opt%=*}
-        var=${opt#*=}
-        eval "opt_${name}=${var}"
-        ;;
-      -* )
-        OPTS+=($arg)
-        ;;
-      * )
-        ARGS+=($arg)
-        ;;
-    esac
-
-    shift
-  done
-}
-
-proc_args $*
 
 if [ ${#ARGS[@]} -lt 2 ]
 then
@@ -66,19 +22,33 @@ fi
 
 lang=${ARGS[0]}
 src=${ARGS[1]}
+size=${ARGS[2]}
+name=${ARGS[3]}
 
 if [ $opt_task_name ]; then
   langdir="${opt_task_name}/LM_${lang}"
+elif [ $opt_here ]; then
+  langdir="."
 else
   langdir=LM_${lang}
 fi
-show_exec mkdir -p $langdir
-#show_exec $IRSTLM/bin/add-start-end.sh \< ${src} \> ${langdir}/train.sb.${lang}
-#show_exec $IRSTLM/bin/build-lm.sh -i ${langdir}/train.sb.${lang} -p -s improved-kneser-ney -o ${langdir}/train.lm.${lang}
-#show_exec $IRSTLM/bin/compile-lm --text ${langdir}/train.lm.${lang}.gz ${langdir}/train.arpa.${lang}
 
-show_exec ${BIN}/lmplz -o ${ORDER} \< ${src} \> ${langdir}/train.arpa.${lang}
+if [ "${name}" ]; then
+  name=${name}
+else
+  name="train"
+fi
+
+if [ ! -d "${langdir}" ]; then
+  show_exec mkdir -p $langdir
+fi
+
+if [ "${size}" ]; then
+  show_exec head -n ${size} ${src} \| ${BIN}/lmplz -o ${ORDER} \> ${langdir}/${name}.arpa.${lang}
+else
+  show_exec ${BIN}/lmplz -o ${ORDER} \< ${src} \> ${langdir}/${name}.arpa.${lang}
+fi
 
 # -- BINARISING --
-show_exec ${BIN}/build_binary -i ${langdir}/train.arpa.${lang} ${langdir}/train.blm.${lang}
+show_exec ${BIN}/build_binary -i ${langdir}/${name}.arpa.${lang} ${langdir}/${name}.blm.${lang}
 

@@ -9,6 +9,7 @@ usage()
   echo ""
   echo "options:"
   echo "  --threads={integer}"
+  echo "  --suffix={string}"
 }
 
 if [ ${#ARGS[@]} -lt 4 ]
@@ -55,6 +56,15 @@ else
   workdir="cascade_${method1}_${method2}_${lang1}-${lang2}-${lang3}"
 fi
 
+if [ "${opt_suffix}" ]; then
+  workdir="${workdir}.${opt_suffix}"
+fi
+
+ask_continue ${workdir}
+show_exec mkdir -p ${workdir}
+LOG=${workdir}/log
+echo "[${stamp} ${HOST}] $0 $*" >> ${LOG}
+
 target1=${workdir}/translated.${lang2}
 if [ "${testname}" ]; then
   target1=${workdir}/translated-${testname}.${lang2}
@@ -62,7 +72,6 @@ fi
 if [ -f ${target1} ]; then
   echo [skip] translating ${lang1} -> ${lang2}
 else
-  show_exec mkdir -p ${workdir}
   ${dir}/wait-file.sh ${ini1}
 #  if [ "$method1" == "moses" ]; then
   if [ "$method1" == "pbmt" ]; then
@@ -99,7 +108,7 @@ if [ "${testname}" ]; then
   score=${workdir}/score-${testname}.out
 fi
 show_exec ${BIN}/mt-evaluator -ref ${ref} ${target2} \> ${score}
-head ${score}
+head ${score} | tee -a ${LOG}
 
-echo "##### End of script: $0 $*"
+echo "##### End of script: $0 $*" | tee -a ${LOG}
 

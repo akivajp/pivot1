@@ -4,6 +4,7 @@ dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
 source "${dir}/common.sh"
 
 TUNE_NBEST=200
+EVAL=bleu
 
 usage()
 {
@@ -31,18 +32,24 @@ task=${ARGS[4]}
 
 workdir="${task}/working"
 show_exec mkdir -p ${workdir}
-show_exec rm -rf ${workdir}/mert-work
+#show_exec rm -rf ${workdir}/mert-work
 if [ "${mt_method}" == "pbmt" ]; then
   task=$(abspath $task)
   show_exec pushd ${workdir}
-#  show_exec $MOSES/scripts/training/mert-moses.pl ${src1} ${src2} ${BIN}/moses ${inifile} --mertdir $MOSES/bin --threads ${THREADS} \> ../mert.out
   show_exec $MOSES/scripts/training/mert-moses.pl ${src1} ${src2} ${BIN}/moses ${inifile} --mertdir $MOSES/bin --threads ${THREADS} \> mert.out
   show_exec popd ${workdir}
 elif [ "${mt_method}" == "hiero" ]; then
-  #show_exec cd ${workdir}
-#  show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/mert-work -in-format word -threads ${THREADS} -eval bleu \> ${task}/tune.log
-  show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/mert-work -in-format word -threads ${THREADS} -eval bleu
+  options=""
+  trg_factors=$(grep -1 trg_factors $inifile | tail -n1)
+  if [ "${trg_factors}" ]; then
+    options="-trg-factors ${trg_factors}"
+    if [ ${trg_factors} -gt 1 ]; then
+      EVAL="bleu:factor=0"
+    fi
+  fi
+#  show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/mert-work -in-format word -threads ${THREADS} -eval bleu
+  show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/mert-work -in-format word -threads ${THREADS} -eval ${EVAL} ${options} -resume
 elif [ "${mt_method}" == "t2s" ]; then
-  show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/mert-work -in-format penn -threads ${THREADS} -eval bleu
+  show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/mert-work -in-format penn -threads ${THREADS} -eval ${EVAL} -resume
 fi
 

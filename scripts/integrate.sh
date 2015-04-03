@@ -1,7 +1,7 @@
 #!/bin/bash
 
 NBEST=20
-METHOD="counts"
+METHOD="count"
 LEX_METHOD="interpolate"
 
 dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
@@ -12,7 +12,7 @@ echo "running script with PID: $$"
 usage()
 {
 #  echo "usage: $0 lang1 lang2 task1 task2 corpus_dir"
-  echo "usage: $0 task1 task2"
+  echo "usage: $0 task1 task2 corpus_dir lm_trg"
   echo ""
   echo "options:"
   echo "  --overwrite"
@@ -22,10 +22,11 @@ usage()
   echo "  --nbest={integer}"
   echo "  --method={string}"
   echo "  --lexmethod={lexmethod}"
+  echo "  --lm_trg={filepath}"
 }
 
 #if [ ${#ARGS[@]} -lt 5 ]
-if [ ${#ARGS[@]} -lt 2 ]
+if [ ${#ARGS[@]} -lt 4 ]
 then
   usage
   exit 1
@@ -33,6 +34,8 @@ fi
 
 task1=${ARGS[0]}
 task2=${ARGS[1]}
+corpus_src=${ARGS[2]}
+lm_trg=${ARGS[3]}
 
 taskname1=$(basename $task1)
 taskname2=$(basename $task2)
@@ -75,6 +78,7 @@ if [ "$opt_suffix" ]; then
   task="${task}.${opt_suffix}"
 fi
 
+ask_continue ${task}
 show_exec mkdir -p ${task}
 LOG=${task}/log
 echo "[${stamp} ${HOST}] $0 $*" >> ${LOG}
@@ -83,7 +87,56 @@ corpus="${task}/corpus"
 langdir=${task}/LM_${lang_trg}
 workdir="${task}/working"
 transdir=${task}/TM
+filterdir="${workdir}/filtered"
 show_exec mkdir -p ${workdir}
+
+case ${mt_method} in
+  pbmt)
+    decoder=moses
+    src_test=${corpus}/test.${lang_src}
+    src_dev=${corpus}/dev.${lang_src}
+    src_devtest=${corpus}/devtest.${lang_src}
+    ;;
+  hiero)
+    decoder=travatar
+    src_test=${corpus}/test.${lang_src}
+    src_dev=${corpus}/dev.${lang_src}
+    src_devtest=${corpus}/devtest.${lang_src}
+    ;;
+  t2s)
+    decoder=travatar
+    src_test=${corpus}/test.tree.${lang_src}
+    src_dev=${corpus}/dev.tree.${lang_src}
+    src_devtest=${corpus}/devtest.tree.${lang_src}
+    ;;
+  *)
+    echo "mt_methos should be one of pbmt/hiero/t2s"
+    exit 1
+    ;;
+esac
+trg_test=${corpus}/test.${lang_trg}
+trg_dev=${corpus}/dev.${lang_trg}
+
+
+case ${decoder} in
+  moses)
+    bindir=${task}/binmodel
+    plain_ini=${transdir}/model/moses.ini
+    final_ini=${bindir}/moses.ini
+    filtered_ini=${filterdir}/moses.ini
+    ${dir}/wait-file.sh ${task1}/TM/model/moses.ini
+    ${dir}/wait-file.sh ${task2}/TM/model/moses.ini
+    ;;
+  travatar)
+    tunedir=${task}/tuned
+    plain_ini=${transdir}/model/travatar.ini
+    final_ini=${tunedir}/travatar.ini
+    filtered_ini=${filterdir}/travatar.ini
+    ${dir}/wait-file.sh ${task1}/TM/model/travatar.ini
+    ${dir}/wait-file.sh ${task2}/TM/model/travatar.ini
+    ;;
+esac
+
 
 if [ -f ${transdir}/model/moses.ini ]; then
   echo [autoskip] integrate
@@ -94,31 +147,34 @@ else
 
   # COPYING CORPUS
   show_exec mkdir -p ${corpus}
-  show_exec cp ${task1}/corpus/devtest.true.{$lang_src,$lang_trg} ${corpus}
-  show_exec cp ${task1}/corpus/test.true.{$lang_src,$lang_trg} ${corpus}
-  show_exec cp ${task1}/corpus/dev.true.{$lang_src,$lang_trg} ${corpus}
-
-  # COPYING LM
-  show_exec mkdir -p ${langdir}
-  show_exec cp ${task1}/LM_${lang_trg}/train.blm.${lang_trg} ${langdir}
+#  show_exec cp ${corpus_src}/devtest.true.{$lang_src,$lang_trg} ${corpus}
+  show_exec cp ${corpus_src}/devtest.{$lang_src,$lang_trg} ${corpus}
+#  show_exec cp ${corpus_src}/test.true.{$lang_src,$lang_trg} ${corpus}
+  show_exec cp ${corpus_src}/test.{$lang_src,$lang_trg} ${corpus}
+#  show_exec cp ${corpus_src}/dev.true.{$lang_src,$lang_trg} ${corpus}
+  show_exec cp ${corpus_src}/dev.{$lang_src,$lang_trg} ${corpus}
 
   # FILTERING
   if [ "${mt_method}" == "pbmt" ]; then
-    show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task1}/TM/model/moses.ini ${corpus}/devtest.true.${lang_src}
+#    show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task1}/TM/model/moses.ini ${corpus}/devtest.true.${lang_src}
+    show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task1}/TM/model/moses.ini ${corpus}/devtest.${lang_src}
     show_exec mv ${workdir}/filtered/phrase-table*.gz ${workdir}/phrase_filtered1.gz
     show_exec rm -rf ${workdir}/filtered
-    show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task2}/TM/model/moses.ini ${corpus}/devtest.true.${lang_src}
+#    show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task2}/TM/model/moses.ini ${corpus}/devtest.true.${lang_src}
+    show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task2}/TM/model/moses.ini ${corpus}/devtest.${lang_src}
     show_exec mv ${workdir}/filtered/phrase-table*.gz ${workdir}/phrase_filtered2.gz
     show_exec rm -rf ${workdir}/filtered
   elif [ "${mt_method}" == "t2s" ]; then
     # REVERSING
     show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/reverse.py ${task1}/TM/model/rule-table.gz ${workdir}/rule_s2t
 #    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \| gzip \> ${workdir}/rule_filtered.gz
-    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
+#    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
+    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.${lang_src} \> ${workdir}/rule_filtered.gz
   elif [ "${mt_method}" == "hiero" ]; then
     # FILTERING
 #    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
-    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered
+#    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered
+    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.${lang_src} \> ${workdir}/rule_filtered
   fi
 
   if [ "${LEX_METHOD}" != "interpolate" ]; then
@@ -150,6 +206,8 @@ else
   fi
   # INTEGRATING
   options="--workdir ${workdir}"
+  options="${options} --method ${METHOD}"
+  options="${options} --lexmethod ${LEX_METHOD}"
   if [ "${THRESHOLD}" ]; then
     options="${options} --threshold ${THRESHOLD}"
   fi
@@ -165,52 +223,110 @@ else
   #  show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/integrate.py ${task1}/TM/model/phrase-table.gz ${task2}/TM/model/phrase-table.gz ${lexfile} ${transdir}/model/phrase-table.gz ${options}
   #  show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/integrate.py ${task1}/TM/model/phrase-table.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz ${options}
     show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/integrate.py ${workdir}/phrase_filtered1.gz ${workdir}/phrase_filtered2.gz ${transdir}/model/phrase-table.gz ${options}
-    show_exec sed -e "s/${task1}/${task}/g" ${task1}/TM/model/moses.ini \> ${transdir}/model/moses.ini
+#    lm_param="KENLM lazyken=0 name=LM0 factor=0 path=${lm_trg} order=5"
+    lm_param="KENLM lazyken=0 name=LM0 factor=0 path=$(abspath ${lm_trg}) order=5"
+#    show_exec sed -e "s/${task1}/${task}/g" -e "s/KENLM.*$/${lm_param}/g" ${task1}/TM/model/moses.ini \> ${transdir}/model/moses.ini
+    show_exec sed -e "'s#$(abspath ${task1})#$(abspath ${task})#g'" -e "'s#KENLM.*#${lm_param}#'" ${task1}/TM/model/moses.ini \> ${transdir}/model/moses.ini
     show_exec rm -rf ${workdir}/phrase_filtered*.gz
     show_exec rm -rf ${workdir}/lex*
+  elif [ "${mt_method}" == "hiero" ]; then
+    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/integrate.py ${workdir}/phrase_filtered1.gz ${workdir}/phrase_filtered2.gz ${transdir}/model/phrase-table.gz ${options}
   fi
   show_exec rm -rf ${workdir}/integrate
 fi
 
-bindir=${task}/binmodel
+# -- TESTING PLAIN --
+if [ -f ${workdir}/score-plain.out ]; then
+  echo [autoskip] testing plain
+else
+  show_exec ${dir}/filter.sh ${mt_method} ${plain_ini} ${src_test} ${workdir}/filtered
+  show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_test} ${trg_test} plain --threads=${THREADS} ${test_options}
+fi
+
+#bindir=${task}/binmodel
+## -- TUNING --
+#if [ ! $opt_overwrite ] && [ -f ${bindir}/moses.ini ]; then
+#  echo [autoskip] tuning
+#elif [ $opt_skip_tuning ]; then
+#  echo [skip] tuning
+#else
+##if [ $opt_tuning ]; then
+##  show_exec ${dir}/tune-moses.sh ${corpus}/dev.true.${lang_src} ${corpus}/dev.true.${lang_trg} ${transdir}/model/moses.ini ${task} --threads=${THREADS}
+#  show_exec ${dir}/tune-moses.sh ${corpus}/dev.${lang_src} ${corpus}/dev.${lang_trg} ${transdir}/model/moses.ini ${task} --threads=${THREADS}
+#
+#  # -- BINARIZING --
+#  show_exec mkdir -p ${bindir}
+#  show_exec ${BIN}/processPhraseTable -ttable 0 0 ${transdir}/model/phrase-table.gz -nscores 5 -out ${bindir}/phrase-table
+#  show_exec sed -e "s/PhraseDictionaryMemory/PhraseDictionaryBinary/" -e "s#${transdir}/model/phrase-table\.gz#${bindir}/phrase-table#" -e "s#${transdir}/model/reordering-table\.wbe-msd-bidirectional-fe\.gz#${bindir}/reordering-table#" ${workdir}/mert-work/moses.ini \> ${bindir}/moses.ini
+#
+#fi
+
 # -- TUNING --
-if [ ! $opt_overwrite ] && [ -f ${bindir}/moses.ini ]; then
+if [ -f "${final_ini}" ]; then
   echo [autoskip] tuning
 elif [ $opt_skip_tuning ]; then
   echo [skip] tuning
 else
-#if [ $opt_tuning ]; then
-  show_exec ${dir}/tune-moses.sh ${corpus}/dev.true.${lang_src} ${corpus}/dev.true.${lang_trg} ${transdir}/model/moses.ini ${task} --threads=${THREADS}
+  show_exec ${dir}/tune.sh ${mt_method} ${src_dev} ${trg_dev} ${plain_ini} ${task} --threads=${THREADS}
 
-  # -- BINARIZING --
-  show_exec mkdir -p ${bindir}
-  show_exec ${BIN}/processPhraseTable -ttable 0 0 ${transdir}/model/phrase-table.gz -nscores 5 -out ${bindir}/phrase-table
-  show_exec sed -e "s/PhraseDictionaryMemory/PhraseDictionaryBinary/" -e "s#${transdir}/model/phrase-table\.gz#${bindir}/phrase-table#" -e "s#${transdir}/model/reordering-table\.wbe-msd-bidirectional-fe\.gz#${bindir}/reordering-table#" ${workdir}/mert-work/moses.ini \> ${bindir}/moses.ini
-
+  if [ "${decoder}" == "moses" ]; then
+    # -- BINARIZING --
+    show_exec mkdir -p ${bindir}
+    show_exec ${BIN}/processPhraseTable -ttable 0 0 ${transdir}/model/phrase-table.gz -nscores 5 -out ${bindir}/phrase-table
+    show_exec sed -e "s/PhraseDictionaryMemory/PhraseDictionaryBinary/" -e "s#${transdir}/model/phrase-table\.gz#${bindir}/phrase-table#" -e "s#${transdir}/model/reordering-table\.wbe-msd-bidirectional-fe\.gz#${bindir}/reordering-table#" ${workdir}/mert-work/moses.ini \> ${final_ini}
+  elif [ "${decoder}" == "travatar" ]; then
+    # -- MAKING TUNED DIR --
+    show_exec mkdir -p ${tunedir}
+    show_exec cp ${workdir}/mert-work/travatar.ini ${tunedir}
+  fi
+  show_exec rm -rf ${workdir}/mert-work
 fi
 
-# -- TESTING --
-if [ ! $opt_overwrite ] && [ -f ${workdir}/score-dev.out ]; then
-  echo [autoskip] testing
-elif [ $opt_skip_test ]; then
-  echo [skip] testing
-else
-#if [ $opt_test ]; then
-  show_exec mkdir -p $workdir
-  # -- TESTING PRAIN --
-  show_exec rm -rf ${workdir}/filtered
-  show_exec ${dir}/filter-moses.sh ${transdir}/model/moses.ini ${corpus}/test.true.${lang_src} ${workdir}/filtered
-  show_exec ${dir}/test-moses.sh ${task} ${workdir}/filtered/moses.ini ${corpus}/test.true.${lang_src} ${corpus}/test.true.${lang_trg} plain --threads=${THREADS}
-  show_exec rm -rf ${workdir}/filtered
 
-  if [ -f ${bindir}/moses.ini ]; then
-    # -- TESTING BINARISED --
-    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/test.true.${lang_src} ${corpus}/test.true.${lang_trg} tuned --threads=${THREADS}
-    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/dev.true.${lang_src} ${corpus}/dev.true.${lang_trg} dev --threads=${THREADS}
+## -- TESTING --
+#if [ ! $opt_overwrite ] && [ -f ${workdir}/score-dev.out ]; then
+#  echo [autoskip] testing
+#elif [ $opt_skip_test ]; then
+#  echo [skip] testing
+#else
+##if [ $opt_test ]; then
+#  show_exec mkdir -p $workdir
+#  # -- TESTING PRAIN --
+#  show_exec rm -rf ${workdir}/filtered
+##  show_exec ${dir}/filter-moses.sh ${transdir}/model/moses.ini ${corpus}/test.true.${lang_src} ${workdir}/filtered
+#  show_exec ${dir}/filter-moses.sh ${transdir}/model/moses.ini ${corpus}/test.${lang_src} ${workdir}/filtered
+##  show_exec ${dir}/test-moses.sh ${task} ${workdir}/filtered/moses.ini ${corpus}/test.true.${lang_src} ${corpus}/test.true.${lang_trg} plain --threads=${THREADS}
+#  show_exec ${dir}/test-moses.sh ${task} ${workdir}/filtered/moses.ini ${corpus}/test.${lang_src} ${corpus}/test.${lang_trg} plain --threads=${THREADS}
+#  show_exec rm -rf ${workdir}/filtered
+#
+#  if [ -f ${bindir}/moses.ini ]; then
+#    # -- TESTING BINARISED --
+##    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/test.true.${lang_src} ${corpus}/test.true.${lang_trg} tuned --threads=${THREADS}
+#    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/test.${lang_src} ${corpus}/test.${lang_trg} tuned --threads=${THREADS}
+##    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/dev.true.${lang_src} ${corpus}/dev.true.${lang_trg} dev --threads=${THREADS}
+#    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/dev.${lang_src} ${corpus}/dev.${lang_trg} dev --threads=${THREADS}
+#  fi
+#fi
+
+# -- TESTING --
+if [ -f ${workdir}/score-dev.out ]; then
+  echo [autoskip] testing
+else
+  if [ -f "${final_ini}" ]; then
+    # -- TESTING TUNED AND DEV --
+    if [ "${mt_method}" == "pbmt" ]; then
+      show_exec ${dir}/test.sh ${mt_method} ${task} ${final_ini} ${src_test} ${trg_test} tuned --threads=${THREADS}
+      show_exec ${dir}/test.sh ${mt_method} ${task} ${final_ini} ${src_dev}  ${trg_dev}  dev --threads=${THREADS}
+    else
+      show_exec ${dir}/filter.sh ${mt_method} ${final_ini} ${src_test} ${workdir}/filtered
+      show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_test} ${trg_test} tuned --threads=${THREADS} ${test_options}
+      show_exec ${dir}/filter.sh ${mt_method} ${final_ini} ${src_dev}  ${workdir}/filtered
+      show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_dev} ${trg_dev} dev --threads=${THREADS} ${test_options}
+    fi
   fi
 fi
 
-head ${workdir}/score*
+head ${workdir}/score* | tee -a ${LOG}
 
-echo "##### End of script: $0 $*"
+echo "##### End of script: $0 $*" | tee -a ${LOG}
 

@@ -9,6 +9,7 @@ usage()
   echo ""
   echo "options:"
   echo "  --threads={integer}"
+  echo "  --trg_factors={integer}"
 }
 
 proc_args $*
@@ -45,8 +46,16 @@ else
 fi
 
 if [ "${score}" ]; then
-  show_exec ${BIN}/mt-evaluator -ref ${ref} ${output} \> ${score}
-  cat ${score}
+  show_exec ${BIN}/mt-evaluator -ref ${ref} ${output} \| tee ${score}
+  if [ "${opt_trg_factors}" ]; then
+    for i in $(seq 0 1); do
+      score_i=${workdir}/score-${test_name}${i}.out
+      show_exec ${BIN}/mt-evaluator -eval "'bleu:factor=${i} ribes:factor=${i}'" -ref ${ref} ${output} \| tee ${score_i}
+    done
+#  else
+#    show_exec ${BIN}/mt-evaluator -ref ${ref} ${output} \> ${score}
+#    cat ${score}
+  fi
 else
   show_exec ${BIN}/mt-evaluator -ref ${ref} ${output}
 fi

@@ -63,8 +63,10 @@ for lang in en ja; do
   esac
   if [ -f "${corpus}/train.clean.${lang}" ]; then
     parse ${model} ${corpus}/train.clean.${lang} ${corpus}/train.tree.${lang}
-    parse ${model} ${corpus}/test.true.${lang}   ${corpus}/test.tree.${lang}
-    parse ${model} ${corpus}/dev.true.${lang}    ${corpus}/dev.tree.${lang}
+#    parse ${model} ${corpus}/test.true.${lang}   ${corpus}/test.tree.${lang}
+    parse ${model} ${corpus}/test.${lang}   ${corpus}/test.tree.${lang}
+#    parse ${model} ${corpus}/dev.true.${lang}    ${corpus}/dev.tree.${lang}
+    parse ${model} ${corpus}/dev.${lang}    ${corpus}/dev.tree.${lang}
   fi
 done
 

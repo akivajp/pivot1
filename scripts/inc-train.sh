@@ -14,7 +14,6 @@ usage()
   echo "mt_method: pbmt hiero t2s"
   echo ""
   echo "options:"
-  echo "  --reordering"
   echo "  --suffix={string}"
   echo "  --task_name={string}"
   echo "  --threads={int}"
@@ -33,10 +32,6 @@ if [ $opt_task_name ]; then
   task=$opt_task_name
 else
   task="${mt_method}_${lang1}-${lang2}"
-fi
-
-if [ "${opt_suffix}" ]; then
-  task=${task}.${opt_suffix}
 fi
 
 if [ -f "${task}/corpus/dev.${lang2}" ]; then
@@ -117,7 +112,6 @@ case ${decoder} in
     ;;
 esac
 
-ask_continue ${task}
 show_exec mkdir -p ${task}
 show_exec mkdir -p ${workdir}
 LOG=${task}/log
@@ -140,27 +134,25 @@ fi
 # -- LINKING LANGUAGE MODEL --
 if [ ! -d ${langdir} ]; then
   show_exec mkdir -p ${langdir}
-#  show_exec ln -s $(abspath ${lm}) ${langdir}/
-  show_exec ln ${lm} ${langdir}/
+  show_exec ln -s $(abspath ${lm}) ${langdir}/
 fi
 lm_file=$(basename $lm)
 lm=$(abspath $langdir/$lm_file)
 
 # -- TRAINING --
-if [ -f "${plain_ini}" ]; then
-  echo [autoskip] translation model
-else
+if [ 1 ]; then
   if [ ${mt_method} == "pbmt" ]; then
-    if [ "${opt_reordering}" ]; then
-      show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering msd-bidirectional-fe -lm 0:${ORDER}:${lm}:8 -external-bin-dir $GIZA -cores ${THREADS} \> ${task}/training.out
-    else
-      #show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering distance -lm 0:${ORDER}:$(pwd)/$langdir/train.blm.${lang2}:8 -external-bin-dir $GIZA -cores ${THREADS} \> ${task}/training.out
-      show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering distance -lm 0:${ORDER}:${lm}:8 -external-bin-dir $GIZA -cores ${THREADS} \> ${task}/training.out
-    fi
+    show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering distance -lm 0:${ORDER}:${lm}:8 -external-bin-dir $GIZA -cores ${THREADS} -final-alignment-model hmm
+    show_exec ${MOSES}/scripts/training/build-mmsapt.perl --alignment ${transdir}/model/aligned.grow-diag-final-and --corpus ${corpus}/train.clean --f ${lang1} --e ${lang2} --DIR ${transdir}/mmsapt
+    echo "modifying moses.ini for mmsapt"
+    new_feature="PhraseDictionaryBitextSampling name=PT0 num-features=7 path=${transdir}/mmsapt/ input-factor=0 output-factor=0 L1=${lang1} L2=${lang2}"
+#    new_weights="PT0= 0.2 0.2 0.2 0.2 0.2 0.2 0.2"
+    new_weights="PT0= 0.1 0.2 0.3 0.4 0.5 0.6 0.7"
+    cat ${transdir}/model/moses.ini | sed -e "/^PhraseDictionaryMemory/a\\${new_feature}" -e "/^TranslationModel0/a\\${new_weights}" \
+        -e "s/^\(PhraseDictionaryMemory\)/#\1/" -e "s/^\(TranslationModel\)/#\1/" > ${transdir}/mmsapt/moses.ini
   elif [ ${mt_method} == "hiero" ]; then
 #    show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${PWD}/${transdir} -src_file ${corpus}/train.clean.${lang1} -trg_file ${corpus}/train.clean.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${PWD}/${langdir}/train.blm.${lang2} -threads ${THREADS}
-#    show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${PWD}/${transdir} -src_file ${corpus}/train.clean.${lang1} -trg_file ${corpus}/train.clean.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${lm} -threads ${THREADS}
-    show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${PWD}/${transdir} -src_file ${corpus}/train.clean.${lang1} -trg_file ${corpus}/train.clean.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS}
+    show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${PWD}/${transdir} -src_file ${corpus}/train.clean.${lang1} -trg_file ${corpus}/train.clean.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${lm} -threads ${THREADS}
   elif [ ${mt_method} == "t2s" ]; then
     src_file=${corpus}/train.tree.${lang1}
     if [ -f "${corpus}/train.tree.${lang2}" ]; then
@@ -170,18 +162,25 @@ else
       trg_file=${corpus}/train.clean.${lang2}
       trg_format=word
     fi
-#    show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format}
-    show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format}
+#    show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${PWD}/${langdir}/train.blm.${lang2} -threads ${THREADS} -src_format penn -trg_format ${trg_format}
+    show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format}
   fi
 fi
+
+exit 0
 
 # -- TESTING PLAIN --
 if [ -f ${workdir}/score-plain.out ]; then
   echo [autoskip] testing plain
 else
+  local ts=$(date +"%Y%m%d-%H%M")
   show_exec ${dir}/filter.sh ${mt_method} ${plain_ini} ${src_test} ${workdir}/filtered
-  show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_test} ${trg_test} plain --threads=${THREADS}
+#  show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_test} ${trg_test} plain --threads=${THREADS}
+  show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_test} ${trg_test} plain-${ts} --threads=${THREADS}
 fi
+
+### EXIT!!!
+exit 0
 
 # -- TUNING --
 if [ -f "${final_ini}" ]; then
@@ -193,18 +192,15 @@ else
   if [ "${mt_method}" == "pbmt" ]; then
     # -- BINARIZING --
     show_exec mkdir -p ${bindir}
-    if [ "${opt_reordering}" ]; then
-      show_exec ${BIN}/processLexicalTable -in ${transdir}/model/reordering-table.wbe-msd-bidirectional-fe.gz -out ${bindir}/reordering-table
-    fi
     show_exec ${BIN}/processPhraseTable -ttable 0 0 ${transdir}/model/phrase-table.gz -nscores 5 -out ${bindir}/phrase-table
+    #show_exec ${BIN}/processLexicalTable -in ${transdir}/model/reordering-table.wbe-msd-bidirectional-fe.gz -out ${bindir}/reordering-table
     show_exec sed -e "s/PhraseDictionaryMemory/PhraseDictionaryBinary/" -e "s#${transdir}/model/phrase-table\.gz#${bindir}/phrase-table#" -e "s#${transdir}/model/reordering-table\.wbe-msd-bidirectional-fe\.gz#${bindir}/reordering-table#" ${workdir}/mert-work/moses.ini \> ${final_ini}
   else
     # -- MAKING TUNED DIR --
     show_exec mkdir -p ${tunedir}
     show_exec cp ${workdir}/mert-work/travatar.ini ${tunedir}
   fi
-#  show_exec rm -rf ${workdir}/mert-work
-  show_exec rm -rf ${workdir}/mert-work/filtered
+  show_exec rm -rf ${workdir}/mert-work
 fi
 
 # -- TESTING --

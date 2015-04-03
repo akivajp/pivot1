@@ -1,9 +1,8 @@
 #!/bin/bash
 
 NBEST=20
-#METHOD="counts"
-METHOD="prodprob"
-LEX_METHOD="prodweight"
+METHOD="count"
+LEX_METHOD="interpolate"
 
 dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
 source "${dir}/common.sh"
@@ -15,11 +14,11 @@ usage()
   echo "options:"
   echo "  --overwrite"
   echo "  --task_name={string}"
-  echo "  --suffix{string}"
+  echo "  --suffix={string}"
   echo "  --threads={integer}"
   echo "  --nbest={integer}"
-  echo "  --method={counts,probs}"
-  echo "  --lexmethod={count,prod}"
+  echo "  --method={count,interpolate}"
+  echo "  --lexmethod={count,interpolate}"
   echo "  --noprefilter"
   echo "  --nulls={int}"
   echo "  --multitarget"
@@ -64,6 +63,13 @@ else
   exit 1
 fi
 
+if [ "${mt_method}" == "pbmt" ]; then
+  if [ "${opt_multitarget}" ]; then
+    echo "multi-target is not supported for pbmt"
+    exit 1
+  fi
+fi
+
 if [ $opt_task_name ]; then
   task=$opt_task_name
 else
@@ -83,31 +89,52 @@ echo "LANG TRG: ${lang_trg}"
 echo "TASK: ${task}"
 
 corpus="${task}/corpus"
-langdir=${task}/LM_${lang_trg}
+#langdir=${task}/LM_${lang_trg}
+langdir=${task}/LM
 workdir="${task}/working"
 transdir=${task}/TM
 filterdir="${workdir}/filtered"
-show_exec mkdir -p ${workdir}
-
-show_exec mkdir -p ${task}
-LOG=${task}/log
-echo "[${stamp} ${HOST}] $0 $*" >> ${LOG}
 
 case ${mt_method} in
   pbmt)
     decoder=moses
+    src_test=${corpus}/test.${lang_src}
+    src_dev=${corpus}/dev.${lang_src}
+    src_devtest=${corpus}/devtest.${lang_src}
     ;;
   hiero)
     decoder=travatar
+    src_test=${corpus}/test.${lang_src}
+    src_dev=${corpus}/dev.${lang_src}
+    src_devtest=${corpus}/devtest.${lang_src}
     ;;
   t2s)
     decoder=travatar
+    src_test=${corpus}/test.tree.${lang_src}
+    src_dev=${corpus}/dev.tree.${lang_src}
+    src_devtest=${corpus}/devtest.tree.${lang_src}
     ;;
   *)
     echo "mt_methos should be one of pbmt/hiero/t2s"
     exit 1
     ;;
 esac
+
+ask_continue ${task}
+show_exec mkdir -p ${task}
+show_exec mkdir -p ${workdir}
+LOG=${task}/log
+echo "[${stamp} ${HOST}] $0 $*" >> ${LOG}
+
+test_options=""
+if [ "${opt_multitarget}" ]; then
+  trg_test=${corpus}/test.${lang_trg}+${lang_pvt}
+  trg_dev=${corpus}/dev.${lang_trg}+${lang_pvt}
+  test_options="--trg_factors=2"
+else
+  trg_test=${corpus}/test.${lang_trg}
+  trg_dev=${corpus}/dev.${lang_trg}
+fi
 
 case ${decoder} in
   moses)
@@ -132,37 +159,67 @@ if [ "${opt_nbest}" ]; then
   NBEST="${opt_nbest}"
 fi
 
-if [ $(expr ${opt_method} : '.*\(multi\)') ]; then
-  multitarget=true
+#if [ $(expr ${opt_method} : '.*\(multi\)') ]; then
+#  multitarget=true
+#fi
+
+#if [ -d ${corpus} ]; then
+if [ -f ${trg_dev} ]; then
+  echo [autoskip] link corpus
+else
+  # LINKING CORPUS DIR
+#  show_exec ln -s $(abspath ${corpus_src}) ${corpus}
+  show_exec mkdir -p ${corpus}
+
+#  show_exec cp ${corpus_src}/devtest.{$lang_src,$lang_trg} ${corpus}
+  show_exec ln ${corpus_src}/devtest.{$lang_src,$lang_trg} ${corpus}
+#  show_exec cp ${corpus_src}/test.{$lang_src,$lang_trg} ${corpus}
+  show_exec ln ${corpus_src}/test.{$lang_src,$lang_trg} ${corpus}
+#  show_exec cp ${corpus_src}/dev.{$lang_src,$lang_trg} ${corpus}
+  show_exec ln ${corpus_src}/dev.{$lang_src,$lang_trg} ${corpus}
+  if [ "${opt_multitarget}" ]; then
+    show_exec ln ${corpus_src}/test.${lang_pvt} ${corpus}
+    show_exec ln ${corpus_src}/dev.${lang_pvt} ${corpus}
+#    show_exec paste ${task2}/corpus/test.{$lang_trg,$lang_pvt} \| sed -e '"s/\t/ |COL| /g"' \> ${trg_test}
+    show_exec paste ${corpus}/test.{$lang_trg,$lang_pvt} \| sed -e '"s/\t/ |COL| /g"' \> ${trg_test}
+#    show_exec paste ${task2}/corpus/dev.{$lang_trg,$lang_pvt} \| sed -e '"s/\t/ |COL| /g"' \> ${trg_dev}
+    show_exec paste ${corpus}/dev.{$lang_trg,$lang_pvt} \| sed -e '"s/\t/ |COL| /g"' \> ${trg_dev}
+  fi
+fi
+
+if [ -d ${langdir} ]; then
+  echo [autoskip] copy langdir
+else
+  # COPYING LM
+  show_exec cp -rf ${task2}/LM ${task}
 fi
 
 if [ -f ${plain_ini} ]; then
   echo [autoskip] pivot
 else
   # COPYING CORPUS
-  show_exec mkdir -p ${corpus}
-  show_exec cp ${corpus_src}/devtest.true.{$lang_src,$lang_trg} ${corpus}
-  show_exec cp ${corpus_src}/test.true.{$lang_src,$lang_trg} ${corpus}
-  show_exec cp ${corpus_src}/dev.true.{$lang_src,$lang_trg} ${corpus}
+#  show_exec mkdir -p ${corpus}
+#  show_exec cp ${corpus_src}/devtest.true.{$lang_src,$lang_trg} ${corpus}
+#  show_exec cp ${corpus_src}/test.true.{$lang_src,$lang_trg} ${corpus}
+#  show_exec cp ${corpus_src}/dev.true.{$lang_src,$lang_trg} ${corpus}
 
   # COPYING LM
-  show_exec cp -rf ${task2}/LM_${lang_trg} ${task}
+#  show_exec cp -rf ${task2}/LM_${lang_trg} ${task}
+#  show_exec cp -rf ${task2}/LM ${task}
 #  show_exec mkdir -p ${langdir}
 #  show_exec cp ${task2}/LM_${lang_trg}/train.blm.${lang_trg} ${langdir}
 
   if [ "${mt_method}" == "pbmt" ]; then
-    show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task1}/TM/model/moses.ini ${corpus_src}/devtest.true.${lang_src}
+    show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task1}/TM/model/moses.ini ${src_devtest}
     show_exec mv ${workdir}/filtered/phrase-table*.gz ${workdir}/phrase_filtered.gz
     show_exec rm -rf ${workdir}/filtered
   elif [ "${mt_method}" == "t2s" ]; then
     # REVERSING
     show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/reverse.py ${task1}/TM/model/rule-table.gz ${workdir}/rule_s2t
-#    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \| gzip \> ${workdir}/rule_filtered.gz
-    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
+    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \> ${workdir}/rule_filtered.gz
   elif [ "${mt_method}" == "hiero" ]; then
     # FILTERING
-#    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
-    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered
+    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \> ${workdir}/rule_filtered
   fi
 
   if [ "${LEX_METHOD}" != "prodweight" ] && [ "${LEX_METHOD}" != "table" ]; then
@@ -202,6 +259,9 @@ else
   if [ "${opt_noprefilter}" ]; then
     options="${options} --noprefilter=True"
   fi
+  if [ "${opt_multitarget}" ]; then
+    options="${options} --multitarget"
+  fi
   if [ "${mt_method}" == "pbmt" ]; then
 #    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/triangulate.py ${task1}/TM/model/phrase-table.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz ${options}
     show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/triangulate.py ${workdir}/phrase_filtered.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz ${options}
@@ -224,21 +284,25 @@ else
   if [ -f ${workdir}/pivot/combined.lex ]; then
     show_exec cp ${workdir}/pivot/combined.lex ${transdir}/model/
   fi
-  if [ "${multitarget}" ]; then
-    show_exec cp -rf ${task1}/LM_${lang_pvt} ${task}
+#  if [ "${multitarget}" ]; then
+  if [ "${opt_multitarget}" ]; then
+#    show_exec cp -rf ${task1}/LM_${lang_pvt} ${task}
+    show_exec cp -rf ${task1}/LM ${task}
 
     echo "x0:X @ S ||| x0:X @ S |COL| x0:X @ S ||| " > ${transdir}/model/glue-rules
     echo "x0:S x1:X @ S ||| x0:S x1:X @ S |COL| x0:S x1:X @ S ||| glue=1" >> ${transdir}/model/glue-rules
 
+    lm_trg=$(ls $langdir | grep blm.$lang_trg)
+    lm_pvt=$(ls $langdir | grep blm.$lang_pvt)
     echo "[tm_file]" > ${transdir}/model/travatar.ini
     echo $(abspath ${transdir}/model/rule-table.gz) >> ${transdir}/model/travatar.ini
     echo $(abspath ${transdir}/model/glue-rules) >> ${transdir}/model/travatar.ini
     echo "" >> ${transdir}/model/travatar.ini
     echo "[lm_file]" >> ${transdir}/model/travatar.ini
-    echo "$(abspath ${task}/LM_${lang_trg}/train.blm.${lang_trg})|factor=0,lm_feat=0lm,lm_unk_feat=0lmunk" >> ${transdir}/model/travatar.ini
-    echo "$(abspath ${task}/LM_${lang_pvt}/train.blm.${lang_pvt})|factor=1,lm_feat=1lm,lm_unk_feat=1lmunk" >> ${transdir}/model/travatar.ini
-#    echo $(abspath ${task}/LM_${lang_trg}/train.blm.${lang_trg})|factor=0,lm_feat=0lm,lm_unk_feat=0lmunk >> ${transdir}/model/travatar.ini
-#    echo $(abspath ${task}/LM_${lang_pvt}/train.blm.${lang_pvt})|factor=0,lm_feat=0lm,lm_unk_feat=0lmunk >> ${transdir}/model/travatar.ini
+#    echo "$(abspath ${task}/LM/${lm_pvt})|factor=0,lm_feat=0lm,lm_unk_feat=0lmunk" >> ${transdir}/model/travatar.ini
+#    echo "$(abspath ${task}/LM/${lm_trg})|factor=1,lm_feat=1lm,lm_unk_feat=1lmunk" >> ${transdir}/model/travatar.ini
+    echo "$(abspath ${task}/LM/${lm_trg})|factor=0,lm_feat=0lm,lm_unk_feat=0lmunk" >> ${transdir}/model/travatar.ini
+    echo "$(abspath ${task}/LM/${lm_pvt})|factor=1,lm_feat=1lm,lm_unk_feat=1lmunk" >> ${transdir}/model/travatar.ini
     echo "" >> ${transdir}/model/travatar.ini
     echo "[in_format]" >> ${transdir}/model/travatar.ini
     echo "word" >> ${transdir}/model/travatar.ini
@@ -274,8 +338,8 @@ fi
 if [ -f ${workdir}/score-plain.out ]; then
   echo [autoskip] testing plain
 else
-  show_exec ${dir}/filter.sh ${mt_method} ${plain_ini} ${corpus}/test.true.${lang_src} ${workdir}/filtered
-  show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${corpus}/test.true.{$lang_src,$lang_trg} plain --threads=${THREADS}
+  show_exec ${dir}/filter.sh ${mt_method} ${plain_ini} ${src_test} ${workdir}/filtered
+  show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_test} ${trg_test} plain --threads=${THREADS} ${test_options}
 fi
 
 # -- TUNING --
@@ -284,7 +348,7 @@ if [ -f "${final_ini}" ]; then
 elif [ $opt_skip_tuning ]; then
   echo [skip] tuning
 else
-  show_exec ${dir}/tune.sh ${mt_method} ${corpus}/dev.true.${lang_src} ${corpus}/dev.true.${lang_trg} ${plain_ini} ${task} --threads=${THREADS}
+  show_exec ${dir}/tune.sh ${mt_method} ${src_dev} ${trg_dev} ${plain_ini} ${task} --threads=${THREADS}
 
   if [ "${decoder}" == "moses" ]; then
     # -- BINARIZING --
@@ -306,13 +370,13 @@ else
   if [ -f "${final_ini}" ]; then
     # -- TESTING TUNED AND DEV --
     if [ "${mt_method}" == "pbmt" ]; then
-      show_exec ${dir}/test.sh ${mt_method} ${task} ${final_ini} ${corpus}/test.true.{$lang_src,$lang_trg} tuned --threads=${THREADS}
-      show_exec ${dir}/test.sh ${mt_method} ${task} ${final_ini} ${corpus}/dev.true.{$lang_src,$lang_trg} dev --threads=${THREADS}
+      show_exec ${dir}/test.sh ${mt_method} ${task} ${final_ini} ${src_test} ${trg_test} tuned --threads=${THREADS}
+      show_exec ${dir}/test.sh ${mt_method} ${task} ${final_ini} ${src_dev}  ${trg_dev}  dev --threads=${THREADS}
     else
-      show_exec ${dir}/filter.sh ${mt_method} ${final_ini} ${corpus}/test.true.${lang_src} ${workdir}/filtered
-      show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${corpus}/test.true.{$lang_src,$lang_trg} tuned --threads=${THREADS}
-      show_exec ${dir}/filter.sh ${mt_method} ${final_ini} ${corpus}/dev.true.${lang_src} ${workdir}/filtered
-      show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${corpus}/dev.true.{$lang_src,$lang_trg} dev --threads=${THREADS}
+      show_exec ${dir}/filter.sh ${mt_method} ${final_ini} ${src_test} ${workdir}/filtered
+      show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_test} ${trg_test} tuned --threads=${THREADS} ${test_options}
+      show_exec ${dir}/filter.sh ${mt_method} ${final_ini} ${src_dev}  ${workdir}/filtered
+      show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_dev} ${trg_dev} dev --threads=${THREADS} ${test_options}
     fi
   fi
 fi
