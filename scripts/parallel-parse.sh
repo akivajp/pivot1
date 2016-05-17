@@ -29,20 +29,10 @@ if [ "${opt_splitsize}" ]; then
   SPLITSIZE=${opt_splitsize}
 fi
 
-wait_file() {
-  local FILE=$1
-  if [ ! -f "$FILE" ]; then
-    echo "waiting for file: \"${FILE}\" ..."
-  fi
-  while [ ! -f "$FILE" ]; do
-    sleep 1
-  done
-  echo "file exists: \"${FILE}\""
-}
-
 check_parse() {
   local INFILE=$1
   local BASE=$(basename $INFILE .toparse)
+  local STAMP=$(get_stamp)
   if [[ ! -f ${TMPDIR}/DONE.parse.${BASE} ]]; then
     if [[ ! -f ${TMPDIR}/START.parse.${BASE} ]]; then
       show_exec echo ${WORKID} \> ${TMPDIR}/START.parse.${BASE}
@@ -52,13 +42,13 @@ check_parse() {
         show_exec ${CKYLARK}/src/bin/ckylark --model ${MODEL} --input ${INFILE} --output ${TMPDIR}/${BASE}.parsed --add-root-tag
         show_exec echo ${WORKID} \> ${TMPDIR}/DONE.parse.${BASE}
       else
-        echo "File exists: ${TMPDIR}/START.parse.${BASE}" $(cat ${TMPDIR}/START.parse.${BASE})
+        echo "[log ${STAMP}] File exists: ${TMPDIR}/START.parse.${BASE}" $(cat ${TMPDIR}/START.parse.${BASE})
       fi
     else
-      echo "File exists: ${TMPDIR}/START.parse.${BASE}" $(cat ${TMPDIR}/START.parse.${BASE})
+      echo "[log ${STAMP}] File exists: ${TMPDIR}/START.parse.${BASE}" $(cat ${TMPDIR}/START.parse.${BASE})
     fi
   else
-    echo "File exists: ${TMPDIR}/DONE.parse.${BASE}" $(cat ${TMPDIR}/DONE.parse.${BASE})
+    echo "[log ${STAMP}] File exists: ${TMPDIR}/DONE.parse.${BASE}" $(cat ${TMPDIR}/DONE.parse.${BASE})
   fi
 }
 
@@ -86,7 +76,7 @@ if [ ! -f ${WORKDIR}/DONE.parse.${BASE} ]; then
   fi
   if [ ! -f ${TMPDIR}/DONE.split.${BASE} ]; then
     if [ -f ${TMPDIR}/START.split.${BASE} ]; then
-      wait_file ${TMPDIR}/DONE.split.${BASE}
+      ${dir}/wait-file.sh ${TMPDIR}/DONE.split.${BASE}
     else
       show_exec echo ${WORKID} \> ${TMPDIR}/START.split.${BASE}
       show_exec sleep 1
@@ -103,15 +93,15 @@ if [ ! -f ${WORKDIR}/DONE.parse.${BASE} ]; then
 #  show_exec ls ${TMPDIR}/${BASE}.\*.toparse \| parallel -j ${THREADS} check_parse {}
   show_exec find ${TMPDIR} \| grep -E '".toparse$"' \| parallel -j ${THREADS} check_parse {}
   if [ -f ${TMPDIR}/START.merge.${BASE} ]; then
-    echo "File exists: ${TMPDIR}/START.merge.${BASE}" $(cat ${TMPDIR}/START.merge.${BASE})
-    wait_file ${TMPDIR}/DONE.merge.${BASE}
+    echo "[log ${STAMP}] File exists: ${TMPDIR}/START.merge.${BASE}" $(cat ${TMPDIR}/START.merge.${BASE})
+    ${dir}/wait-file.sh ${TMPDIR}/DONE.merge.${BASE}
   else
     show_exec echo ${WORKID} \> ${TMPDIR}/START.merge.${BASE}
     show_exec sleep 1
     TMPID=$(cat ${TMPDIR}/START.merge.${BASE})
     if [[ "${TMPID}" == "${WORKID}" ]]; then
       for file in ${TMPDIR}/${BASE}.*.toparse; do
-        wait_file ${TMPDIR}/DONE.parse.$(basename $file .toparse)
+        ${dir}/wait-file.sh ${TMPDIR}/DONE.parse.$(basename $file .toparse)
       done
       show_exec cat ${TMPDIR}/${BASE}.\*.parsed \| pv -Wl \> ${OUTFILE}
       show_exec echo ${WORKID} \> ${TMPDIR}/DONE.merge.${BASE}

@@ -20,23 +20,10 @@ get_stamp()
   fi
   echo "${TSTAMP} on ${H}${TPANE}"
 }
+export -f get_stamp
 
 show_exec()
 {
-#  local pane=""
-#  local stamp=$(date +"%Y/%m/%d %H:%M:%S")
-##  if [ "${TMUX_PANE}" ]; then
-##    pane=":${TMUX_PANE}"
-##  fi
-#  local host=${HOST}
-#  if [ "${HOSTNAME}" ]; then
-#    host=${HOSTNAME}
-#  fi
-#  local PANE=$(tmux display -p "#I.#P" 2> /dev/null)
-#  if [ "${PANE}" ]; then
-#    pane=":${PANE}"
-#  fi
-#  echo "[exec ${stamp} on ${host}${pane}] $*" | tee -a ${LOG}
   local STAMP=$(get_stamp)
   echo "[exec ${STAMP}] $*" | tee -a ${LOG}
   eval $*
@@ -44,12 +31,12 @@ show_exec()
   if [ $? -gt 0 ]
   then
     local red=31
-#    local msg="[error ${stamp} on ${host}${pane}]: $*"
     local msg="[error ${STAMP}]: $*"
     echo -e "\033[${red}m${msg}\033[m" | tee -a ${LOG}
     exit 1
   fi
 }
+export -f show_exec
 
 proc_args()
 {
@@ -81,6 +68,7 @@ proc_args()
     shift
   done
 }
+export -f proc_args
 
 abspath()
 {
@@ -90,6 +78,7 @@ abspath()
   done
   echo "${ABSPATHS[@]}"
 }
+export -f abspath
 
 ask_continue()
 {
@@ -113,6 +102,7 @@ ask_continue()
     esac
   done
 }
+export -f ask_continue
 
 proc_args $*
 
