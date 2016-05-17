@@ -5,15 +5,47 @@ stamp=$(date +"%Y/%m/%d %H:%M:%S")
 
 source ${dir}/config.sh
 
+get_stamp()
+{
+  local FILE=$1
+  local PANE=""
+  local TSTAMP=$(date +"%Y/%m/%d %H:%M:%S")
+  local H=${HOST}
+  if [ "${HOSTNAME}" ]; then
+    H=${HOSTNAME}
+  fi
+  local TPANE=$(tmux display -p "#I.#P" 2> /dev/null)
+  if [ "${TMUX_PANE}" ]; then
+    PANE=":${TPANE}"
+  fi
+  echo "${TSTAMP} on ${H}${TPANE}"
+}
+
 show_exec()
 {
-  echo "[exec ${stamp} on ${HOST}] $*" | tee -a ${LOG}
+#  local pane=""
+#  local stamp=$(date +"%Y/%m/%d %H:%M:%S")
+##  if [ "${TMUX_PANE}" ]; then
+##    pane=":${TMUX_PANE}"
+##  fi
+#  local host=${HOST}
+#  if [ "${HOSTNAME}" ]; then
+#    host=${HOSTNAME}
+#  fi
+#  local PANE=$(tmux display -p "#I.#P" 2> /dev/null)
+#  if [ "${PANE}" ]; then
+#    pane=":${PANE}"
+#  fi
+#  echo "[exec ${stamp} on ${host}${pane}] $*" | tee -a ${LOG}
+  local STAMP=$(get_stamp)
+  echo "[exec ${STAMP}] $*" | tee -a ${LOG}
   eval $*
 
   if [ $? -gt 0 ]
   then
     local red=31
-    local msg="[error ${stamp} on ${HOST}]: $*"
+#    local msg="[error ${stamp} on ${host}${pane}]: $*"
+    local msg="[error ${STAMP}]: $*"
     echo -e "\033[${red}m${msg}\033[m" | tee -a ${LOG}
     exit 1
   fi
@@ -52,7 +84,11 @@ proc_args()
 
 abspath()
 {
-  echo $(cd $(dirname $1) && pwd)/$(basename $1)
+  ABSPATHS=()
+  for path in "$@"; do
+    ABSPATHS+=(`echo $(cd $(dirname $path) && pwd)/$(basename $path)`)
+  done
+  echo "${ABSPATHS[@]}"
 }
 
 ask_continue()
@@ -90,6 +126,14 @@ elif [ "${opt_lex_method}" ]; then
   LEX_METHOD="${opt_lex_method}"
 elif [ "${opt_lmethod}" ]; then
   LEX_METHOD="${opt_lmethod}"
+fi
+
+if [ "${opt_jointmethod}" ]; then
+  JOINT_METHOD="${opt_jointmethod}"
+elif [ "${opt_joint_method}" ]; then
+  JOINT_METHOD="${opt_joint_method}"
+elif [ "${opt_jmethod}" ]; then
+  JOINT_METHOD="${opt_jmethod}"
 fi
 
 if [ $opt_threads ]; then

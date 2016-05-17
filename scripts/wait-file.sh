@@ -1,17 +1,26 @@
 #!/bin/bash
 
+dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
+source "${dir}/common.sh"
+
 if [ $# -lt 1 ]; then
   echo "usage: $0 file [file ...]"
   exit 1
 fi
 
-for file in $*; do
-  if [ ! -f "$file" ]; then
-    echo "waiting for file: \"${file}\" ..."
+wait_onefile()
+{
+  local STAMP=$(get_stamp)
+  if [ ! -f "$FILE" ]; then
+    echo "[log ${STAMP}] waiting for file: \"${FILE}\" ..."
   fi
-  while [ ! -f "$file" ]; do
+  while [ ! -f "$FILE" ]; do
     sleep 1
   done
-  echo "file exists: \"${file}\""
+  echo "[log ${STAMP}] file exists: \"${FILE}\""
+}
+
+for FILE in $*; do
+  wait_onefile ${FILE}
 done
 

@@ -9,7 +9,9 @@ usage()
 {
 #  echo "usage: $0 mt_method lang_id1 lang_id2 src1 src2"
   echo "usage: $0 mt_method lang_id1 lang_id2 src1 src2 lm train_size dev_test_size"
-  echo "usage: $0 mt_method lang_id1 lang_id2 --resume"
+#  echo "usage: $0 mt_method lang_id1 lang_id2 lm --corpus=corpus_dir"
+#  echo "usage: $0 mt_method lang_id1 lang_id2 lm --resume"
+#  echo "usage: $0 mt_method lang_id1 lang_id2 --resume"
   echo ""
   echo "mt_method: pbmt hiero t2s"
   echo ""
@@ -34,15 +36,28 @@ else
   task="${mt_method}_${lang1}-${lang2}"
 fi
 
-if [ -f "${task}/corpus/dev.${lang2}" ]; then
-  if [ ${#ARGS[@]} -lt 3 ]; then
+if [ "${opt_corpus}" ]; then
+  if [ ${#ARGS[@]} -lt 4 ]; then
     usage
     exit 1
   fi
-#elif [ ${#ARGS[@]} -lt 5 ]; then
+  lm=${ARGS[3]}
+#elif [ -f "${task}/corpus/dev.${lang2}" ]; then
+#  if [ ${#ARGS[@]} -lt 3 ]; then
+#    usage
+#    exit 1
+#  fi
+##  lm=${ARGS[3]}
+##elif [ ${#ARGS[@]} -lt 5 ]; then
 elif [ ${#ARGS[@]} -lt 8 ]; then
   usage
   exit 1
+else
+  src1=${ARGS[3]}
+  src2=${ARGS[4]}
+  lm=${ARGS[5]}
+  opt_train_size=${ARGS[6]}
+  opt_dev_test_size=${ARGS[7]}
 fi
 
 corpus="${task}/corpus"
@@ -122,13 +137,23 @@ options=""
 options="$options --train_size=${opt_train_size}"
 options="$options --dev_test_size=${opt_dev_test_size}"
 options="$options --task_name=${task}"
-if [ -f ${trg_dev} ]; then
+
+old_train=0
+if [ -f ${corpus}/train.${lang1} ]; then
+  old_train=$(wc -l ${corpus}/train.${lang1} | cut -f1 -d' ')
+fi
+echo "OLD TRAIN: ${old_train}"
+
+if [ $old_train == ${opt_train_size} ]; then
+#if [ -f ${trg_dev} ]; then
   echo [autoskip] corpus format
 else
   show_exec "${dir}/format-corpus.sh" ${lang1} ${src1} ${lang2} ${src2} ${options} --threads=${THREADS}
   if [ "${mt_method}" == "t2s" ]; then
     show_exec "${dir}/parse-corpus.sh" ${corpus} ${options} --threads=${THREADS}
   fi
+  rm -rf ${corpus}/train.clean.{$lang1,$lang2}
+  show_exec ${TRAVATAR}/script/train/clean-corpus.pl -max_len ${CLEAN_LENGTH} ${corpus}/train.{$lang1,$lang2} ${corpus}/train.clean.{$lang1,$lang2}
 fi
 
 # -- LINKING LANGUAGE MODEL --
@@ -142,14 +167,69 @@ lm=$(abspath $langdir/$lm_file)
 # -- TRAINING --
 if [ 1 ]; then
   if [ ${mt_method} == "pbmt" ]; then
-    show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering distance -lm 0:${ORDER}:${lm}:8 -external-bin-dir $GIZA -cores ${THREADS} -final-alignment-model hmm
-    show_exec ${MOSES}/scripts/training/build-mmsapt.perl --alignment ${transdir}/model/aligned.grow-diag-final-and --corpus ${corpus}/train.clean --f ${lang1} --e ${lang2} --DIR ${transdir}/mmsapt
-    echo "modifying moses.ini for mmsapt"
-    new_feature="PhraseDictionaryBitextSampling name=PT0 num-features=7 path=${transdir}/mmsapt/ input-factor=0 output-factor=0 L1=${lang1} L2=${lang2}"
-#    new_weights="PT0= 0.2 0.2 0.2 0.2 0.2 0.2 0.2"
-    new_weights="PT0= 0.1 0.2 0.3 0.4 0.5 0.6 0.7"
-    cat ${transdir}/model/moses.ini | sed -e "/^PhraseDictionaryMemory/a\\${new_feature}" -e "/^TranslationModel0/a\\${new_weights}" \
-        -e "s/^\(PhraseDictionaryMemory\)/#\1/" -e "s/^\(TranslationModel\)/#\1/" > ${transdir}/mmsapt/moses.ini
+    gizadir=${transdir}/giza
+    show_exec mkdir -p ${gizadir}
+    show_exec rm -rf ${gizadir}/{$lang1,$lang2}
+    show_exec ln ${corpus}/train.clean.${lang1} ${gizadir}/${lang1}
+    show_exec ln ${corpus}/train.clean.${lang2} ${gizadir}/${lang2}
+    show_exec ${INCGIZA}/plain2snt.out ${gizadir}/{$lang1,$lang2} -txt1-vocab ${gizadir}/${lang1}.vcb -txt2-vocab ${gizadir}/${lang2}.vcb
+    if [ ! -f ${gizadir}/${lang1}-${lang2}.cooc ]; then
+      show_exec ${INCGIZA}/snt2cooc.out ${gizadir}/{$lang1,$lang2}.vcb ${gizadir}/${lang1}_${lang2}.snt \> ${gizadir}/${lang1}-${lang2}.cooc &
+      show_exec ${INCGIZA}/snt2cooc.out ${gizadir}/{$lang2,$lang1}.vcb ${gizadir}/${lang2}_${lang1}.snt \> ${gizadir}/${lang2}-${lang1}.cooc &
+      show_exec wait
+    else
+      show_exec ${INCGIZA}/snt2cooc.out ${gizadir}/{$lang1,$lang2}.vcb ${gizadir}/${lang1}_${lang2}.snt ${gizadir}/${lang1}-${lang2}.cooc \> ${gizadir}/new.${lang1}-${lang2}.cooc &
+      show_exec ${INCGIZA}/snt2cooc.out ${gizadir}/{$lang2,$lang1}.vcb ${gizadir}/${lang2}_${lang1}.snt ${gizadir}/${lang2}-${lang1}.cooc \> ${gizadir}/new.${lang2}-${lang1}.cooc &
+      wait
+      show_exec mv ${gizadir}/new.${lang1}-${lang2}.cooc ${gizadir}/${lang1}-${lang2}.cooc
+      show_exec mv ${gizadir}/new.${lang2}-${lang1}.cooc ${gizadir}/${lang2}-${lang1}.cooc
+    fi
+    if [ ! -f ${gizadir}/${lang2}-${lang1}.hhmm.last ]; then
+      show_exec ${INCGIZA}/GIZA++ -S ${gizadir}/${lang1}.vcb -T ${gizadir}/${lang2}.vcb -C ${gizadir}/${lang1}_${lang2}.snt -O ${gizadir}/${lang1}-${lang2} -CoocurrenceFile ${gizadir}/${lang1}-${lang2}.cooc -hmmiterations 5 -hmmdumpfrequency 5 -m1 5 -m3 0 -m4 0 &
+      show_exec ${INCGIZA}/GIZA++ -S ${gizadir}/${lang2}.vcb -T ${gizadir}/${lang1}.vcb -C ${gizadir}/${lang2}_${lang1}.snt -O ${gizadir}/${lang2}-${lang1} -CoocurrenceFile ${gizadir}/${lang2}-${lang1}.cooc -hmmiterations 5 -hmmdumpfrequency 5 -m1 5 -m3 0 -m4 0 &
+      wait
+    else
+      show_exec ${INCGIZA}/GIZA++ -S ${gizadir}/${lang1}.vcb -T ${gizadir}/${lang2}.vcb -C ${gizadir}/${lang1}_${lang2}.snt -O ${gizadir}/${lang1}-${lang2} -CoocurrenceFile ${gizadir}/${lang1}-${lang2}.cooc -hmmiterations 1 -hmmdumpfrequency 1 -m1 1 -m3 0 -m4 0 -stepk 1 -oldTrPrbs ${gizadir}/${lang1}-${lang2}.thmm.last -oldAlPrbs ${gizadir}/${lang1}-${lang2}.hhmm.last &
+      show_exec ${INCGIZA}/GIZA++ -S ${gizadir}/${lang2}.vcb -T ${gizadir}/${lang1}.vcb -C ${gizadir}/${lang2}_${lang1}.snt -O ${gizadir}/${lang2}-${lang1} -CoocurrenceFile ${gizadir}/${lang2}-${lang1}.cooc -hmmiterations 1 -hmmdumpfrequency 1 -m1 1 -m3 0 -m4 0 -stepk 1 -oldTrPrbs ${gizadir}/${lang2}-${lang1}.thmm.last -oldAlPrbs ${gizadir}/${lang2}-${lang1}.hhmm.last &
+      wait
+    fi
+    for file in ${gizadir}/*hmm.?; do
+      show_exec mv $file ${file%.*}.last
+    done
+
+    show_exec mkdir -p ${transdir}/model
+#    show_exec ${MOSES}/scripts/training/giza2bal.pl -d ${gizadir}/${lang2}-${lang1}.Ahmm.last -i ${gizadir}/${lang1}-${lang2}.Ahmm.last \| symal -alignment="grow" -diagonal="yes" -final="yes" -both="yes" \> ${transdir}/model/align.txt
+    show_exec ${MOSES}/scripts/training/giza2bal.pl -d ${gizadir}/${lang1}-${lang2}.Ahmm.last -i ${gizadir}/${lang2}-${lang1}.Ahmm.last \| symal -alignment="grow" -diagonal="yes" -final="yes" -both="yes" \> ${transdir}/model/align.txt
+
+#    show_exec ${MOSES}/scripts/training/giza2bal.pl -d ${gizadir}/${lang1}-${lang2}.Ahmm.last -i ${gizadir}/${lang2}-${lang1}.Ahmm.last \| symal -alignment="grow" -diagonal="yes" -final="yes" -both="yes" \> ${transdir}/model/aligned.grow-diag-final-and
+
+#    show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -external-bin-dir $INCGIZA -reordering msd-bidirectional-fe -alignment-file ${transdir}/model/align -alignment txt -corpus ${corpus}/train.clean -f ${lang1} -e ${lang2} -lm 0:${ORDER}:${lm}:8 -mmsapt '""' -phrase-translation-table $transdir/mmsapt:11:7 -do-steps 5,7,9
+    show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -external-bin-dir $INCGIZA -reordering msd-bidirectional-fe -alignment-file ${transdir}/model/align -alignment txt -corpus ${corpus}/train.clean -f ${lang1} -e ${lang2} -lm 0:${ORDER}:${lm}:8 -mmsapt '""' -phrase-translation-table $transdir/mmsapt:11:7 -do-steps 5,7,9 -baseline-extract ${transdir}/model/extract
+
+#    if [ ! -f ${transdir}/model/moses.ini ]; then
+#      show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering distance -lm 0:${ORDER}:${lm}:8 -external-bin-dir $INCGIZA -cores ${THREADS} -final-alignment-model hmm -mmsapt '""' -phrase-translation-table $transdir/mmsapt:11:7 -do-steps 1-3,9
+#    else
+##      show_exec rm ${transdir}/corpus/*.classes ${transdir}/corpus/*.snt
+#      prev=${transdir}.prev
+#      if [ -d ${prev} ]; then
+#        show_exec rm -r ${prev}
+#      fi
+#      show_exec mv ${transdir} ${prev}
+#      show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering distance -lm 0:${ORDER}:${lm}:8 -external-bin-dir $INCGIZA -cores ${THREADS} -final-alignment-model hmm -baseline-alignment-model $(abspath ${prev}/corpus/${lang1}.vcb ${prev}/corpus/${lang2}.vcb ${prev}/giza.${lang2}-${lang1}/${lang2}-${lang1}.cooc ${prev}/giza.${lang1}-${lang2}/${lang1}-${lang2}.cooc ${prev}/giza.${lang2}-${lang1}/${lang2}-${lang1}.{thmm.5,hhmm.5} ${prev}/giza.${lang1}-${lang2}/${lang1}-${lang2}.{thmm.5,hhmm.5}) -mmsapt '""' -phrase-translation-table $transdir/mmsapt:11:7 -do-steps 1-3,9
+#    fi
+#    show_exec $MOSES/scripts/training/train-model.perl -root-dir $transdir -corpus $corpus/train.clean -f ${lang1} -e ${lang2} -alignment grow-diag-final-and -reordering distance -lm 0:${ORDER}:${lm}:8 -external-bin-dir $MGIZA -mgiza -mgiza-cpus ${THREADS} -cores ${THREADS} -final-alignment-model hmm
+
+#    show_exec ${MOSES}/scripts/training/build-mmsapt.perl --alignment ${transdir}/model/aligned.grow-diag-final-and --corpus ${corpus}/train.clean --f ${lang1} --e ${lang2} --DIR ${transdir}/mmsapt
+    show_exec ${MOSES}/scripts/training/build-mmsapt.perl --alignment ${transdir}/model/align.txt --corpus ${corpus}/train.clean --f ${lang1} --e ${lang2} --DIR ${transdir}/mmsapt
+    if [ -f ${transdir}/model/moses.ini ]; then
+      show_exec cp ${transdir}/model/moses.ini ${transdir}/mmsapt
+    fi
+#    echo "modifying moses.ini for mmsapt"
+#    new_feature="PhraseDictionaryBitextSampling name=PT0 num-features=7 path=${transdir}/mmsapt/ input-factor=0 output-factor=0 L1=${lang1} L2=${lang2}"
+##    new_weights="PT0= 0.2 0.2 0.2 0.2 0.2 0.2 0.2"
+#    new_weights="PT0= 0.1 0.2 0.3 0.4 0.5 0.6 0.7"
+#    cat ${transdir}/model/moses.ini | sed -e "/^PhraseDictionaryMemory/a\\${new_feature}" -e "/^TranslationModel0/a\\${new_weights}" \
+#        -e "s/^\(PhraseDictionaryMemory\)/#\1/" -e "s/^\(TranslationModel\)/#\1/" > ${transdir}/mmsapt/moses.ini
   elif [ ${mt_method} == "hiero" ]; then
 #    show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${PWD}/${transdir} -src_file ${corpus}/train.clean.${lang1} -trg_file ${corpus}/train.clean.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${PWD}/${langdir}/train.blm.${lang2} -threads ${THREADS}
     show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${PWD}/${transdir} -src_file ${corpus}/train.clean.${lang1} -trg_file ${corpus}/train.clean.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${lm} -threads ${THREADS}

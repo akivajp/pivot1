@@ -12,6 +12,7 @@ usage()
   echo ""
   echo "options:"
   echo "  --threads={integer}"
+  echo "  --eval={string}"
 }
 
 if [ ${#ARGS[@]} -lt 5 ]
@@ -24,6 +25,12 @@ if [ ${opt_threads} ]; then
   THREADS=${opt_threads}
 fi
 
+mert_out="mert-work"
+if [ "${opt_eval}" ]; then
+  EVAL=${opt_eval}
+  mert_out="mert-work-${opt_eval}"
+fi
+
 mt_method=${ARGS[0]}
 src1=$(abspath ${ARGS[1]})
 src2=$(abspath ${ARGS[2]})
@@ -33,23 +40,28 @@ task=${ARGS[4]}
 workdir="${task}/working"
 show_exec mkdir -p ${workdir}
 #show_exec rm -rf ${workdir}/mert-work
-if [ "${mt_method}" == "pbmt" ]; then
-  task=$(abspath $task)
-  show_exec pushd ${workdir}
-  show_exec $MOSES/scripts/training/mert-moses.pl ${src1} ${src2} ${BIN}/moses ${inifile} --mertdir $MOSES/bin --threads ${THREADS} \> mert.out
-  show_exec popd ${workdir}
-elif [ "${mt_method}" == "hiero" ]; then
-  options=""
-  trg_factors=$(grep -1 trg_factors $inifile | tail -n1)
-  if [ "${trg_factors}" ]; then
-    options="-trg-factors ${trg_factors}"
-    if [ ${trg_factors} -gt 1 ]; then
-      EVAL="bleu:factor=0"
+case "${mt_method}" in
+  pbmt)
+    task=$(abspath $task)
+    show_exec pushd ${workdir}
+    show_exec $MOSES/scripts/training/mert-moses.pl ${src1} ${src2} ${BIN}/moses ${inifile} --mertdir $MOSES/bin --threads ${THREADS} 2\> mert.out \| tee mert.log
+    show_exec popd
+    ;;
+  hiero|scfg)
+    options=""
+    trg_factors=$(grep -1 trg_factors $inifile | tail -n1)
+    if [ "${trg_factors}" ]; then
+      options="-trg-factors ${trg_factors}"
+      if [ ${trg_factors} -gt 1 ]; then
+        EVAL="bleu:factor=0"
+        if [ "${opt_eval}" ]; then
+          EVAL="${opt_eval}:factor=0"
+        fi
+      fi
     fi
-  fi
-#  show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/mert-work -in-format word -threads ${THREADS} -eval bleu
-  show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/mert-work -in-format word -threads ${THREADS} -eval ${EVAL} ${options} -resume
-elif [ "${mt_method}" == "t2s" ]; then
-  show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/mert-work -in-format penn -threads ${THREADS} -eval ${EVAL} -resume
-fi
+    show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/${mert_out} -in-format word -threads ${THREADS} -eval ${EVAL} ${options} -resume
+    ;;
+  t2s)
+    show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/${mert_out} -in-format penn -threads ${THREADS} -eval ${EVAL} -resume
+esac
 

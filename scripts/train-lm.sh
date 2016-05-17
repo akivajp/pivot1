@@ -12,6 +12,7 @@ usage()
   echo "options:"
   echo "  --task_name={string}"
   echo "  --here"
+  echo "  --skip={integer}"
 }
 
 if [ ${#ARGS[@]} -lt 2 ]
@@ -24,6 +25,11 @@ lang=${ARGS[0]}
 src=${ARGS[1]}
 size=${ARGS[2]}
 name=${ARGS[3]}
+
+let START=1
+if [ $opt_skip ]; then
+  let START="${opt_skip}"+1
+fi
 
 if [ $opt_task_name ]; then
   langdir="${opt_task_name}/LM_${lang}"
@@ -44,9 +50,10 @@ if [ ! -d "${langdir}" ]; then
 fi
 
 if [ "${size}" ]; then
-  show_exec head -n ${size} ${src} \| ${BIN}/lmplz -o ${ORDER} \> ${langdir}/${name}.arpa.${lang}
+  show_exec cat ${src} \| tail -n +${START} \|  head -n ${size} \| ${BIN}/lmplz -o ${ORDER} \> ${langdir}/${name}.arpa.${lang}
 else
-  show_exec ${BIN}/lmplz -o ${ORDER} \< ${src} \> ${langdir}/${name}.arpa.${lang}
+#  show_exec ${BIN}/lmplz -o ${ORDER} \< ${src} \> ${langdir}/${name}.arpa.${lang}
+  show_exec cat ${src} \| tail -n +${START} \| ${BIN}/lmplz -o ${ORDER} \< ${src} \> ${langdir}/${name}.arpa.${lang}
 fi
 
 # -- BINARISING --

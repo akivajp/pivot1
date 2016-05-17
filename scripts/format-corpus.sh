@@ -16,12 +16,14 @@ source "${dir}/common.sh"
 
 usage()
 {
-  echo "usage: $0 lang_id1 src1 lang_id2 src2 [lang_id3 src3]"
+  echo "usage: $0 lang_id1 src1 [[lang_id2 src2] ...]"
   echo ""
   echo "options:"
   echo "  --train_size={int}"
   echo "  --test_size={int}"
   echo "  --dev_size={int}"
+  echo "  --random"
+  echo "  --seed={int}"
   echo "  --dev_test_size={int}"
   echo "  --task_name={string}"
 }
@@ -66,19 +68,26 @@ truecase()
   fi
 }
 
-if [ ${#ARGS[@]} -lt 4 ]
+if [ ${#ARGS[@]} -lt 2 ]
 then
   usage
   exit 1
 fi
 
-lang1=${ARGS[0]}
-src1=${ARGS[1]}
-lang2=${ARGS[2]}
-src2=${ARGS[3]}
-lang3=${ARGS[4]}
-src3=${ARGS[5]}
+if [[ $(perl -e "print ${#ARGS[@]} % 2") == 1 ]]; then
+  usage
+  echo "num args should be even: ${#ARGS[@]}"
+  exit 1
+fi
 
+langs=()
+files=()
+for (( i = 0; i < ${#ARGS[@]}; i +=2 )); do
+  langs+=(${ARGS[$i]})
+  files+=(${ARGS[$i+1]})
+done
+echo LANGS: ${langs[@]}
+echo FILES: ${files[@]}
 
 declare -i train_size=$opt_train_size
 if [ $train_size -lt 1 ]
@@ -110,20 +119,35 @@ fi
 if [ $opt_task_name ]; then
   corpus="${opt_task_name}/corpus"
 else
-  corpus=corpus_${lang1}-${lang2}
-  if [ "${lang3}" ]; then
-    corpus=corpus_${lang1}-${lang2}-${lang3}
-  fi
+  tuple=$(echo ${langs[@]} | sed -e 's/ /-/g')
+  corpus="corpus_${tuple}"
 fi
 show_exec mkdir -p $corpus
 
-if [[ ${train_size} -gt 0 ]]; then
-  show_exec head -n ${train_size} ${src1} \> $corpus/train.${lang1}
-  show_exec head -n ${train_size} ${src2} \> $corpus/train.${lang2}
-  if [ "${lang3}" ]; then
-    show_exec head -n ${train_size} ${src3} \> $corpus/train.${lang3}
-  fi
+if [ "${opt_dev_test_size}" ]; then
+  show_exec ${dir}/random-split.py --seed=0 "${files[0]}" "${files[1]}" ${train_size} ${opt_dev_test_size} ${opt_dev_test_size} ${corpus}/train ${corpus}/test ${corpus}/dev "${langs[0]}" "${langs[1]}"
+else
+  show_exec ${dir}/random-split.py --seed=0 "${files[0]}" "${files[1]}" ${train_size} ${test_size} ${dev_size} ${corpus}/train ${corpus}/test ${corpus}/dev "${langs[0]}" "${langs[1]}"
 fi
+show_exec cat ${corpus}/{test,dev}.${langs[0]} \| pv -Wl \> ${corpus}/devtest.${langs[0]}
+show_exec cat ${corpus}/{test,dev}.${langs[1]} \| pv -Wl \> ${corpus}/devtest.${langs[1]}
+
+#if [[ ${train_size} -gt 0 ]]; then
+#  let offset=1
+#  if [ "${opt_dev_test_size}" ]; then
+#    let offset=${offset}+${opt_dev_test_size}*2
+#  fi
+#  if [ "${opt_test_size}" ]; then
+#    let offset=${offset}+${opt_test_size}
+#  fi
+#  if [ "${opt_dev_size}" ]; then
+#    let offset=${offset}+${opt_dev_size}
+#  fi
+#  for (( i = 0; i < ${#langs[@]}; i++ )); do
+##    show_exec head -n ${train_size} ${files[$i]} \> ${corpus}/train.${langs[$i]}
+#    show_exec tail -n +${offset} ${files[$i]} \|  head -n ${train_size} \> ${corpus}/train.${langs[$i]}
+#  done
+#fi
 
 #tokenize ${lang1} train
 #tokenize ${lang2} train
@@ -132,61 +156,38 @@ fi
 #truecase ${lang1} train
 #truecase ${lang2} train
 
-if [ $opt_dev_test_size ]; then
-#  offset=$(expr $train_size + 1)
-  let offset=${train_size}+1
-#  size=$(expr $opt_dev_test_size \* 2)
-  let size=${opt_dev_test_size}*2
-  show_exec tail -n +${offset} ${src1} \| head -n ${size} \> ${corpus}/devtest.${lang1}
-  show_exec tail -n +${offset} ${src2} \| head -n ${size} \> ${corpus}/devtest.${lang2}
+#if [ $opt_dev_test_size ]; then
+##  let offset=${train_size}+1
+#  let offset=1
+#  let size=${opt_dev_test_size}*2
+#  for (( i = 0; i < ${#langs[@]}; i++ )); do
+#    show_exec tail -n +${offset} ${files[$i]} \| head -n ${size} \> ${corpus}/devtest.${langs[$i]}
+##    show_exec tail -n ${size} ${files[$i]} \> ${corpus}/devtest.${langs[$i]}
+##  tokenize ${lang1} devtest
+##  truecase ${lang1} devtest
+#    show_exec cat ${corpus}/devtest.${langs[$i]} \| ${dir}/interleave.py ${corpus}/{test,dev}.${langs[$i]}
+#  done
+#else
+##  let offset=${train_size}+1
+#  let offset=1
+#  if [[ "${test_size}" -gt 0 ]]; then
+#    for (( i = 0; i < ${#langs[@]}; i++ )); do
+#      show_exec tail -n +${offset} ${files[$i]} \| head -n ${test_size} \> $corpus/test.${langs[$i]}
+##  tokenize ${lang1} test
+##  truecase ${lang1} test
+#    done
+#  fi
+#  let offset=${offset}+${test_size}
+#  if [[ "${dev_size}" -gt 0 ]]; then
+#    for (( i = 0; i < ${#langs[@]}; i++ )); do
+##  tokenize ${lang1} dev
+##  truecase ${lang1} dev
+#      show_exec tail -n +${offset} ${files[$i]} \| head -n ${dev_size} \> ${corpus}/dev.${langs[$i]}
+#    done
+#  fi
+#fi
 
-#  tokenize ${lang1} devtest
-#  tokenize ${lang2} devtest
-#  truecase ${lang1} devtest
-#  truecase ${lang2} devtest
-
-#  show_exec cat ${corpus}/devtest.true.${lang1} \| ${dir}/interleave.py ${corpus}/{test,dev}.true.${lang1}
-#  show_exec cat ${corpus}/devtest.true.${lang2} \| ${dir}/interleave.py ${corpus}/{test,dev}.true.${lang2}
-  show_exec cat ${corpus}/devtest.${lang1} \| ${dir}/interleave.py ${corpus}/{test,dev}.${lang1}
-  show_exec cat ${corpus}/devtest.${lang2} \| ${dir}/interleave.py ${corpus}/{test,dev}.${lang2}
-
-  if [ "${lang3}" ]; then
-    show_exec tail -n +${offset} ${src3} \| head -n ${size} \> ${corpus}/devtest.${lang3}
-    show_exec cat ${corpus}/devtest.${lang3} \| ${dir}/interleave.py ${corpus}/{test,dev}.${lang3}
-  fi
-else
-#  offset=$(expr $train_size + 1)
-  let offset=${train_size}+1
-  if [[ "${test_size}" -gt 0 ]]; then
-    show_exec tail -n +${offset} ${src1} \| head -n ${test_size} \> $corpus/test.${lang1}
-    show_exec tail -n +${offset} ${src2} \| head -n ${test_size} \> $corpus/test.${lang2}
-    if [ "${lang3}" ]; then
-      show_exec tail -n +${offset} ${src3} \| head -n ${test_size} \> $corpus/test.${lang3}
-    fi
-  fi
-#  offset=$(expr $offset + $test_size)
-  let offset=${$offset}+${test_size}
-  if [[ "${dev_size}" -gt 0 ]]; then
-    show_exec tail -n +${offset} ${src1} \| head -n ${dev_size} \> ${corpus}/dev.${lang1}
-    show_exec tail -n +${offset} ${src2} \| head -n ${dev_size} \> ${corpus}/dev.${lang2}
-    if [ "${lang3}" ]; then
-      show_exec tail -n +${offset} ${src3} \| head -n ${dev_size} \> ${corpus}/dev.${lang3}
-    fi
-  fi
-
-#  tokenize ${lang1} test
-#  tokenize ${lang2} test
-#  tokenize ${lang1} dev
-#  tokenize ${lang2} dev
-#
-#  truecase ${lang1} test
-#  truecase ${lang2} test
-#  truecase ${lang1} dev
-#  truecase ${lang2} dev
-fi
-
-if [[ "${train_size}" -gt 0 ]]; then
-  #show_exec ~/exp/moses/scripts/training/clean-corpus-n.perl $corpus/train.true ${lang1} ${lang2} $corpus/train.clean 1 ${CLEAN_LENGTH}
-  show_exec ${TRAVATAR}/script/train/clean-corpus.pl -max_len ${CLEAN_LENGTH} ${corpus}/train.{$lang1,$lang2} ${corpus}/train.clean.{$lang1,$lang2}
-fi
+#if [[ "${train_size}" -gt 0 ]]; then
+#  show_exec ${TRAVATAR}/script/train/clean-corpus.pl -max_len ${CLEAN_LENGTH} ${corpus}/train.{$lang1,$lang2} ${corpus}/train.clean.{$lang1,$lang2}
+#fi
 

@@ -7,12 +7,9 @@ echo "running script with PID: $$"
 
 usage()
 {
-#  echo "usage: $0 mt_method lang_id1 lang_id2 src1 src2"
-  echo "usage: $0 mt_method lang_id1 lang_id2 src1 src2 lm train_size dev_test_size"
-  echo "usage: $0 mt_method lang_id1 lang_id2 lm --corpus=corpus_dir"
-  echo "usage: $0 mt_method lang_id1 lang_id2 lm --resume"
+  echo "usage: $0 mt_method lang_id1 lang_id2"
   echo ""
-  echo "mt_method: pbmt hiero t2s"
+  echo "mt_method: s2t s2s"
   echo ""
   echo "options:"
   echo "  --reordering"
@@ -26,9 +23,14 @@ usage()
   echo "  --ribes"
 }
 
-mt_method=${ARGS[0]}
-lang1=${ARGS[1]}
-lang2=${ARGS[2]}
+if [ ${#ARGS[@]} -lt 3 ]; then
+    usage
+    exit 1
+else
+  mt_method=${ARGS[0]}
+  lang1=${ARGS[1]}
+  lang2=${ARGS[2]}
+fi
 
 SRC_INPUT="word"
 if [ "${opt_src_input}" ]; then
@@ -45,89 +47,27 @@ if [ "${opt_suffix}" ]; then
   task=${task}.${opt_suffix#.}
 fi
 
-if [ "${opt_corpus}" ]; then
-  if [ ${#ARGS[@]} -lt 4 ]; then
-    usage
-    exit 1
-  fi
-  lm=${ARGS[3]}
-elif [ -f "${task}/corpus/dev.${lang2}" ]; then
-  if [ ${#ARGS[@]} -lt 3 ]; then
-    usage
-    exit 1
-  fi
-  lm=${ARGS[3]}
-#elif [ ${#ARGS[@]} -lt 5 ]; then
-elif [ ${#ARGS[@]} -lt 8 ]; then
-  usage
-  exit 1
-else
-  src1=${ARGS[3]}
-  src2=${ARGS[4]}
-  lm=${ARGS[5]}
-  opt_train_size=${ARGS[6]}
-  opt_dev_test_size=${ARGS[7]}
-fi
-
 corpus="${task}/corpus"
 langdir="${task}/LM"
 transdir="${task}/TM"
 workdir="${task}/working"
 filterdir="${workdir}/filtered"
 
-if [ "${mt_method}" == "moses" ]; then
-  mt_method=pbmt
-fi
-
 case ${mt_method} in
-  pbmt)
-    decoder=moses
-#    src_test=${corpus}/test.true.${lang1}
-#    src_dev=${corpus}/dev.true.${lang1}
-    src_test=${corpus}/test.${lang1}
-    src_dev=${corpus}/dev.${lang1}
-    ;;
-  hiero)
-    decoder=travatar
-#    src_test=${corpus}/test.true.${lang1}
-#    src_dev=${corpus}/dev.true.${lang1}
-    src_test=${corpus}/test.${lang1}
-    src_dev=${corpus}/dev.${lang1}
-    ;;
-  t2s)
+  s2s|s2t)
     decoder=travatar
     src_test=${corpus}/test.tree.${lang1}
     src_dev=${corpus}/dev.tree.${lang1}
     ;;
   *)
-    echo "mt_methos should be one of pbmt/hiero/t2s"
+    echo "mt_methos should be one of s2s/s2t"
     exit 1
     ;;
 esac
-#trg_test=${corpus}/test.true.${lang2}
-#trg_dev=${corpus}/dev.true.${lang2}
 trg_test=${corpus}/test.${lang2}
 trg_dev=${corpus}/dev.${lang2}
 
-if [ "${mt_method}" == "t2s" ]; then
-  case ${lang1} in
-    en)
-      ;;
-    ja)
-      ;;
-    *)
-      echo "lang1 should be one of en/ja"
-      exit 1
-  esac
-fi
-
 case ${decoder} in
-  moses)
-    bindir=${task}/binmodel
-    plain_ini=${transdir}/model/moses.ini
-    final_ini=${bindir}/moses.ini
-    filtered_ini=${filterdir}/moses.ini
-    ;;
   travatar)
     tunedir=${task}/tuned
     plain_ini=${transdir}/model/travatar.ini
@@ -136,46 +76,50 @@ case ${decoder} in
     ;;
 esac
 
-ask_continue ${task}
-show_exec mkdir -p ${task}
-show_exec mkdir -p ${workdir}
-LOG=${task}/log
-echo "[${stamp} ${HOST}] $0 $*" >> ${LOG}
-
-# -- CORPUS FORMATTING --
-if [ -f ${trg_dev} ]; then
-#if [ -f ${corpus}/train.clean.${lang2} ]; then
-  echo [autoskip] corpus format
-else
-  mkdir -p ${corpus}
-  if [ ! -f ${trg_dev} ]; then
-    if [ "${opt_corpus}" ]; then
-      show_exec ln ${opt_corpus}/train.{$lang1,$lang2} ${corpus}
-      show_exec ln ${opt_corpus}/devtest.{$lang1,$lang2} ${corpus}
-      show_exec ln ${opt_corpus}/test.{$lang1,$lang2} ${corpus}
-      show_exec ln ${opt_corpus}/dev.{$lang1,$lang2} ${corpus}
-    else
-      options=""
-      options="$options --train_size=${opt_train_size}"
-      options="$options --dev_test_size=${opt_dev_test_size}"
-      options="$options --task_name=${task}"
-      show_exec "${dir}/format-corpus.sh" ${lang1} ${src1} ${lang2} ${src2} ${options} --threads=${THREADS}
-      if [ "${SRC_INPUT}" == "penn" ]; then
-        for TYPE in train test dev devtest; do
-          show_exec mv ${corpus}/${TYPE}.${lang1} ${corpus}/${TYPE}.tree.${lang1}
-          show_exec cat ${corpus}/${TYPE}.tree.${lang1} \| pv -Wl \| ${TRAVATAR}/src/bin/tree-converter -input_format penn -output_format word \> ${corpus}/${TYPE}.${lang1}
-        done
-      fi
-    fi
-  fi
-  #show_exec ${TRAVATAR}/script/train/clean-corpus.pl -max_len ${CLEAN_LENGTH} ${corpus}/train.{$lang1,$lang2} ${corpus}/train.clean.{$lang1,$lang2}
-  if [ "${mt_method}" == "t2s" ]; then
-    echo "SRC_INPUT: ${SRC_INPUT}"
-    if [ "${SRC_INPUT}" == "word" ]; then
-      show_exec "${dir}/parse-corpus.sh" ${corpus} ${options} --threads=${THREADS}
-    fi
+if [ "${mt_method}" == "s2t" ]; then
+  BASE_TASK=t2s_${lang2}-${lang1}
+  if [ ! -f "${BASE_TASK}/TM/model/travatar.ini" ]; then
+    echo "[error] base task \"${BASE_TASK}\" is not trained" > /dev/stderr
+    exit 1
   fi
 fi
+
+ask_continue ${task}
+
+if [ ! -d ${task} ]; then
+  show_exec mkdir -p ${transdir}/model
+  LOG=${task}/log
+  echo "[${stamp} ${HOST}] $0 $*" >> ${LOG}
+  show_exec ln ${BASE_TASK}/TM/model/fof.txt ${transdir}/model/
+  show_exec mkdir -p ${task}/TM/lex
+  show_exec ln ${BASE_TASK}/TM/lex/src_given_trg.lex ${task}/TM/lex/trg_given_src.lex
+  show_exec ln ${BASE_TASK}/TM/lex/trg_given_src.lex ${task}/TM/lex/src_given_trg.lex
+else
+  LOG=${task}/log
+fi
+
+SORT_OPTIONS="-S10%"
+EXTRACT_FILE="${transdir}/model/extract.gz"
+EXTRACT_FILE_REV="${BASE_TASK}/TM/model/extract.gz"
+FOF_FILE="${transdir}/model/fof.txt"
+LEX_TRGSRC="${task}/TM/lex/src_given_trg.lex"
+LEX_SRCTRG="${task}/TM/lex/trg_given_src.lex"
+RT_SRCTRG="${transdir}/model/rule-table.src-trg.gz";
+RT_TRGSRC="${transdir}/model/rule-table.trg-src.gz";
+PV_PIPE="pv -Wl";
+PV_SORT="pv -Wl -N 'Sorting Records'";
+SMOOTH="none"
+TM_FILE="${transdir}/model/rule-table.gz"
+NBEST_RULES=20
+
+show_exec "zcat ${EXTRACT_FILE_REV} | ${TRAVATAR}/script/train/reverse-rt.pl | ${PV_PIPE} | gzip > ${EXTRACT_FILE}"
+show_exec "zcat $EXTRACT_FILE | env LC_ALL=C sort $SORT_OPTIONS | $TRAVATAR/script/train/score-t2s.pl --fof-file=$FOF_FILE --lex-prob-file=$LEX_TRGSRC --cond-prefix=egf --joint | env LC_ALL=C sort $SORT_OPTIONS | gzip > $RT_SRCTRG &";
+show_exec "zcat $EXTRACT_FILE_REV | $PV_SORT | env LC_ALL=C sort $SORT_OPTIONS | $TRAVATAR/script/train/score-t2s.pl --lex-prob-file=$LEX_SRCTRG --cond-prefix=fge | $TRAVATAR/script/train/reverse-rt.pl | $PV_SORT | env LC_ALL=C sort $SORT_OPTIONS | $PV_PIPE | gzip > $RT_TRGSRC";
+show_exec wait
+
+show_exec "$TRAVATAR/script/train/combine-rt.pl --fof-file=$FOF_FILE --smooth=$SMOOTH --top-n=$NBEST_RULES $RT_SRCTRG $RT_TRGSRC | $PV_PIPE | gzip > $TM_FILE"
+
+exit 1
 
 lm_file="blm.${lang2}"
 # -- LINKING LANGUAGE MODEL --

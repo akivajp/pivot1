@@ -51,18 +51,22 @@ parse()
 for lang in en ja; do
   case ${lang} in
     en)
-      model=${CKYLARK}/model/wsj
+#      model=${CKYLARK}/model/wsj
+      model=${CKYLARK}/data/wsj
       ;;
     ja)
-      model=${CKYLARK}/model/jdc
+#      model=${CKYLARK}/model/jdc
+      model=${CKYLARK}/data/jdc
       ;;
     *)
       echo "cannot solve parsing model"
       exit 1
       ;;
   esac
-  if [ -f "${corpus}/train.clean.${lang}" ]; then
-    parse ${model} ${corpus}/train.clean.${lang} ${corpus}/train.tree.${lang}
+#  if [ -f "${corpus}/train.clean.${lang}" ]; then
+  if [ -f "${corpus}/train.${lang}" ]; then
+#    parse ${model} ${corpus}/train.clean.${lang} ${corpus}/train.tree.${lang}
+    parse ${model} ${corpus}/train.${lang} ${corpus}/train.tree.${lang}
 #    parse ${model} ${corpus}/test.true.${lang}   ${corpus}/test.tree.${lang}
     parse ${model} ${corpus}/test.${lang}   ${corpus}/test.tree.${lang}
 #    parse ${model} ${corpus}/dev.true.${lang}    ${corpus}/dev.tree.${lang}
