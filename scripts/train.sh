@@ -150,6 +150,13 @@ else
   mkdir -p ${corpus}
   if [ ! -f ${trg_dev} ]; then
     if [ "${opt_corpus}" ]; then
+      #show_exec ln ${opt_corpus}/train.{$lang1,$lang2} ${corpus}
+      #show_exec ln ${opt_corpus}/devtest.{$lang1,$lang2} ${corpus}
+      #show_exec ln ${opt_corpus}/test.{$lang1,$lang2} ${corpus}
+      #show_exec ln ${opt_corpus}/dev.{$lang1,$lang2} ${corpus}
+      safe_link ${opt_corpus}/train.tree.${lang1} ${corpus}/train.tree.${lang1}
+      safe_link ${opt_corpus}/test.tree.${lang1} ${corpus}/test.tree.${lang1}
+      safe_link ${opt_corpus}/dev.tree.${lang1} ${corpus}/dev.tree.${lang1}
       show_exec ln ${opt_corpus}/train.{$lang1,$lang2} ${corpus}
       show_exec ln ${opt_corpus}/devtest.{$lang1,$lang2} ${corpus}
       show_exec ln ${opt_corpus}/test.{$lang1,$lang2} ${corpus}
@@ -223,8 +230,12 @@ else
       trg_file=${corpus}/train.${lang2}
       trg_format=word
     fi
+    travatar_options=""
+    if [[ "${opt_coocfilter}" ]]; then
+      travatar_options="${travatar_options} -score_options=\"--cooc-min-freq=${opt_coocfilter}\""
+    fi
 #    show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format}
-    show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format}
+    show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options}
   fi
 fi
 

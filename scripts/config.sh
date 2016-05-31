@@ -22,7 +22,7 @@ PYTHONPATH=$HOME/exp/explib-python/lib
 IRSTLM=~/exp/irstlm
 
 ORDER=5
-THREADS=8
+THREADS=2
 
 CLEAN_LENGTH=60
 

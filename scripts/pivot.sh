@@ -13,6 +13,7 @@ usage()
   echo "usage: $0 task1 task2 corpus_dir"
   echo ""
   echo "options:"
+#  echo "  --grammar={s2s,x2x}"
   echo "  --overwrite"
   echo "  --task_name={string}"
   echo "  --suffix={string}"
@@ -23,6 +24,7 @@ usage()
   echo "  --jointmethod={memoryless,independent}"
   echo "  --noprefilter"
   echo "  --nulls={int}"
+#  echo "  --match={tree,tag,string}"
   echo "  --multitarget"
   echo "  --coocfilter={float}"
   echo "  --ribes"
@@ -62,9 +64,35 @@ fi
 
 if [ "${mt_method1}" == "${mt_method2}" ]; then
   if [ "${mt_method1}" == "t2s" ]; then
-    mt_method="scfg"
+    case "${opt_grammar}" in
+      "")      mt_method="s2s" ;;
+      sym2sym) mt_method="s2s" ;;
+      scfg)    mt_method="s2s" ;;
+      x2x)     mt_method="x2x" ;;
+      hiero)   mt_method="x2x" ;;
+      *)
+        echo "Can not solve pivot grammar: ${opt_grammar}"
+        exit 1
+    esac
+    echo "PIVOT MT_METHOD: ${mt_method}"
+    case "${opt_match}" in
+      "")   matching="tree" ;;
+      tree) matching="tree" ;;
+      tag)  matching="tag" ;;
+      str*) matching="string" ;;
+    esac
+    echo "PIVOT MATCHING MODE: ${matching}"
   else
     mt_method=${mt_method1}
+  fi
+elif [[ "${mt_method1}" =~ .2.p ]]; then
+  if [[ "${mt_method1}" =~ s2.p ]]; then
+    mt_method=s2s
+  elif [[ "${mt_method1}" =~ x2.p ]]; then
+    mt_method=x2x
+  else
+    echo "can not solve pivot method"
+    exit 1
   fi
 else
   echo "can not solve pivot method"
@@ -115,7 +143,7 @@ case ${mt_method} in
     src_dev=${corpus}/dev.${lang_src}
     src_devtest=${corpus}/devtest.${lang_src}
     ;;
-  scfg)
+  s2s|x2x)
     decoder=travatar
     #src_test=${corpus}/test.tree.${lang_src}
     #src_dev=${corpus}/dev.tree.${lang_src}
@@ -227,10 +255,10 @@ else
     show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task1}/TM/model/moses.ini ${src_devtest}
     show_exec mv ${workdir}/filtered/phrase-table*.gz ${workdir}/phrase_filtered.gz
     show_exec rm -rf ${workdir}/filtered
-  elif [ "${mt_method}" == "scfg" ]; then
-    # REVERSING
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/reverse.py ${task1}/TM/model/rule-table.gz ${workdir}/rule_s2t
-    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \> ${workdir}/rule_filtered
+  elif [[ "${mt_method}" =~ (s2s|x2x) ]]; then
+    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/reverse.py ${task1}/TM/model/rule-table.gz ${workdir}/rule_s2t
+    #show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \> ${workdir}/rule_filtered
+    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \| pv -WN filtered \> ${workdir}/rule_filtered
   elif [ "${mt_method}" == "hiero" ]; then
     # FILTERING
 #    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \> ${workdir}/rule_filtered
@@ -293,10 +321,14 @@ else
       show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/filter.py ${transdir}/model/rule-table.full.gz ${transdir}/model/rule-table.gz "'c.c >= ${opt_coocfilter}'" --progress
     fi
     rm ${workdir}/rule_filtered ${workdir}/rule_filtered.index
-  elif [ "${mt_method}" == "scfg" ]; then
+  elif [[ "${mt_method}" =~ (s2s|x2x) ]]; then
 #    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
     show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
     show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/make_glue_rules.py ${transdir}/model/rule-table.gz ${transdir}/model/glue-rules -p
+    if [[ "${opt_coocfilter}" ]]; then
+      show_exec mv ${transdir}/model/rule-table.gz ${transdir}/model/rule-table.full.gz
+      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/filter.py ${transdir}/model/rule-table.full.gz ${transdir}/model/rule-table.gz "'c.c >= ${opt_coocfilter}'" --progress
+    fi
     #show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/travatar.ini \> ${plain_ini}
     show_exec cat ${task2}/TM/model/travatar.ini \| sed -e "'s:${task2}:${task}:g'" -e "'s/^unk=.*/unk=-1/g'" -e "'/rule-table.gz/a $(abspath ${transdir}/model/glue-rules)'" \> ${plain_ini}
     show_exec echo '"[in_format]"' \>\> ${plain_ini}

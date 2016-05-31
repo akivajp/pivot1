@@ -15,10 +15,10 @@ get_stamp()
     H=${HOSTNAME}
   fi
   local TPANE=$(tmux display -p "#I.#P" 2> /dev/null)
-  if [ "${TMUX_PANE}" ]; then
+  if [ "${TPANE}" ]; then
     PANE=":${TPANE}"
   fi
-  echo "${TSTAMP} on ${H}${TPANE}"
+  echo "${TSTAMP} on ${H}${PANE}"
 }
 export -f get_stamp
 
@@ -154,6 +154,34 @@ get_lang_trg()
     lang=$(expr $taskname : '.*_..-\(..\)')
   fi
   echo ${lang}
+}
+
+relink()
+{
+  local SRC=$1
+  local TRG=$2
+  if [ -f ${TRG} ]; then
+    show_exec rm ${TRG}
+  fi
+  show_exec ln ${SRC} ${TRG}
+}
+
+safe_link()
+{
+  local SRC=$1
+  local TRG=$2
+  if [ -f ${SRC} ]; then
+    show_exec ln ${SRC} ${TRG}
+  fi
+}
+
+safe_remove()
+{
+  for FILE in "$@"; do
+    if [ -f ${FILE} ]; then
+      show_exec rm ${FILE}
+    fi
+  done
 }
 
 solve_decoder()
