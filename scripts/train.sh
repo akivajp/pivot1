@@ -24,6 +24,8 @@ usage()
   echo "  --srcfilter={float}"
   echo "  --src_input={word,penn}"
   echo "  --ribes"
+  echo "  --normalize"
+  echo "  --skip_test"
 }
 
 mt_method=${ARGS[0]}
@@ -213,30 +215,47 @@ else
       show_exec mv ${transdir}/model/phrase-table.gz ${transdir}/model/phrase-table.full.gz
       show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/filter.py ${transdir}/model/phrase-table.full.gz ${transdir}/model/phrase-table.gz "'c.s >= ${opt_srcfilter}'" --progress
     fi
-  elif [ ${mt_method} == "hiero" ]; then
+  elif [ "${decoder}" == "travatar" ]; then
     travatar_options=""
+    score_options=""
+#    if [[ "${opt_srcfilter}" ]]; then
+#      score_options="${score_options} --src-min-freq=${opt_srcfilter}"
+#    fi
     if [[ "${opt_coocfilter}" ]]; then
-      travatar_options="${travatar_options} -score_options=\"--cooc-min-freq=${opt_coocfilter}\""
+      score_options="${score_options} --cooc-min-freq=${opt_coocfilter}"
     fi
-    #show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${PWD}/${transdir} -src_file ${corpus}/train.clean.${lang1} -trg_file ${corpus}/train.clean.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -progress -sort_options="-S10%" ${travatar_options}
-    show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${PWD}/${transdir} -src_file ${corpus}/train.${lang1} -trg_file ${corpus}/train.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -progress -sort_options="-S10%" ${travatar_options}
-  elif [ ${mt_method} == "t2s" ]; then
-    src_file=${corpus}/train.tree.${lang1}
-    if [ -f "${corpus}/train.tree.${lang2}" ]; then
-      trg_file=${corpus}/train.tree.${lang2}
-      trg_format=penn
-    else
-      #trg_file=${corpus}/train.clean.${lang2}
-      trg_file=${corpus}/train.${lang2}
-      trg_format=word
+    if [[ "${score_options}" ]]; then
+      travatar_options="${travatar_options} -score_options=\"${score_options}\""
     fi
-    travatar_options=""
-    if [[ "${opt_coocfilter}" ]]; then
-      travatar_options="${travatar_options} -score_options=\"--cooc-min-freq=${opt_coocfilter}\""
+    if [[ "${opt_normalize}" ]]; then
+      travatar_options="${travatar_options} -normalize=true"
     fi
-#    show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${BIN} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format}
-    show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options}
+    if [ ${mt_method} == "hiero" ]; then
+      #show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${PWD}/${transdir} -src_file ${corpus}/train.${lang1} -trg_file ${corpus}/train.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -progress -sort_options="-S10%" ${travatar_options}
+      show_exec ${TRAVATAR}/script/train/train-travatar.pl -method hiero -work_dir ${PWD}/${transdir} -src_file ${corpus}/train.${lang1} -trg_file ${corpus}/train.${lang2} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -progress -sort_options="-S10%" ${travatar_options} -resume
+    elif [ ${mt_method} == "t2s" ]; then
+      src_file=${corpus}/train.tree.${lang1}
+      if [ -f "${corpus}/train.tree.${lang2}" ]; then
+        trg_file=${corpus}/train.tree.${lang2}
+        trg_format=penn
+      else
+        #trg_file=${corpus}/train.clean.${lang2}
+        trg_file=${corpus}/train.${lang2}
+        trg_format=word
+      fi
+      #show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options}
+      show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options} -resume
+      if [[ "${opt_srcfilter}" ]]; then
+        show_exec mv ${transdir}/model/rule-table.gz ${transdir}/model/rule-table.full.gz
+        show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/filter.py ${transdir}/model/rule-table.full.gz ${transdir}/model/rule-table.gz "'c.s >= ${opt_srcfilter}'" --progress
+      fi
+    fi
   fi
+fi
+
+if [ "${opt_skip_test}" ]; then
+  echo "Exit without testing"
+  exit 0
 fi
 
 # -- TESTING PLAIN --
@@ -267,8 +286,6 @@ else
     show_exec mkdir -p ${tunedir}
     show_exec cp ${workdir}/mert-work/travatar.ini ${tunedir}
   fi
-#  show_exec rm -rf ${workdir}/mert-work
-  show_exec rm -rf ${workdir}/mert-work/filtered
 fi
 
 # -- TESTING --
@@ -306,7 +323,6 @@ if [ "${opt_ribes}" ]; then
     # -- MAKING TUNED DIR --
     show_exec mkdir -p ${rtunedir}
     show_exec cp ${workdir}/mert-work-ribes/travatar.ini ${rtunedir}
-    show_exec rm -rf ${workdir}/mert-work-ribes/filtered
   fi
   # -- TESTING --
   if [ -f ${workdir}/score-rdev.out ]; then

@@ -39,7 +39,6 @@ task=${ARGS[4]}
 
 workdir="${task}/working"
 show_exec mkdir -p ${workdir}
-#show_exec rm -rf ${workdir}/mert-work
 case "${mt_method}" in
   pbmt)
     task=$(abspath $task)
@@ -71,4 +70,13 @@ case "${mt_method}" in
     show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/${mert_out} -in-format word -threads ${THREADS} -eval ${EVAL} -resume
     ;;
 esac
+
+show_exec rm -rf ${workdir}/${mert_out}/filtered
+if [[ "${mt_method}" == pbmt ]]; then
+  show_exec rm ${workdir}/${mert_out}/*.gz
+else
+  show_exec rm ${workdir}/${mert_out}/*.nbest
+  show_exec rm ${workdir}/${mert_out}/*.stats
+  show_exec rm ${workdir}/${mert_out}/*.uniq
+fi
 

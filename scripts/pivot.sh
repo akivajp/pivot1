@@ -428,8 +428,6 @@ else
     show_exec mkdir -p ${tunedir}
     show_exec cp ${workdir}/mert-work/travatar.ini ${tunedir}
   fi
-  #show_exec rm -rf ${workdir}/mert-work
-  show_exec rm -rf ${workdir}/mert-work/filtered
 fi
 
 # -- TESTING --
@@ -463,7 +461,6 @@ if [ "${opt_ribes}" ]; then
     # -- MAKING TUNED DIR --
     show_exec mkdir -p ${rtunedir}
     show_exec cp ${workdir}/mert-work-ribes/travatar.ini ${rtunedir}
-    show_exec rm -rf ${workdir}/mert-work-ribes/filtered
   fi
   # -- TESTING --
   if [ -f ${workdir}/score-rdev.out ]; then
@@ -482,5 +479,6 @@ fi
 #show_exec rm -rf ${workdir}/filtered
 head ${workdir}/score* | tee -a ${LOG}
 
+show_exec rm -rf ${workdir}/pivot
 echo "##### End of script: $0 $*" | tee -a ${LOG}
 

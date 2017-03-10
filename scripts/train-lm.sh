@@ -7,7 +7,7 @@ source "${dir}/common.sh"
 
 usage()
 {
-  echo "usage: $0 lang_id src_corpus [size] [name]"
+  echo "usage: $0 lang_id src_corpus [name] [size]"
 
   echo "options:"
   echo "  --task_name={string}"
@@ -23,8 +23,8 @@ fi
 
 lang=${ARGS[0]}
 src=${ARGS[1]}
-size=${ARGS[2]}
-name=${ARGS[3]}
+name=${ARGS[2]}
+size=${ARGS[3]}
 
 let START=1
 if [ $opt_skip ]; then

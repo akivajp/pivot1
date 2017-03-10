@@ -1,7 +1,8 @@
 #!/bin/bash
 
 NBEST=20
-METHOD="count"
+#METHOD="count"
+METHOD="interpolate"
 LEX_METHOD="interpolate"
 
 dir="$(cd "$(dirname "${BASH_SOURCE:-${(%):-%N}}")"; pwd)"
@@ -23,6 +24,8 @@ usage()
   echo "  --method={string}"
   echo "  --lexmethod={lexmethod}"
   echo "  --lm_trg={filepath}"
+  echo "  --skip_test"
+  echo "  --yes"
 }
 
 #if [ ${#ARGS[@]} -lt 5 ]
@@ -47,12 +50,13 @@ mt_method2=$(get_mt_method $taskname2)
 lang_task2_src=$(get_lang_src $taskname2)
 lang_task2_trg=$(get_lang_trg $taskname2)
 
-if [ "${mt_method1}" == "${mt_method2}" ]; then
-  mt_method=${mt_method1}
-else
-  echo "mt_method: ${mt_method1} != ${mt_method2}"
-  exit 1
-fi
+#if [ "${mt_method1}" == "${mt_method2}" ]; then
+#  mt_method=${mt_method1}
+#else
+#  echo "mt_method: ${mt_method1} != ${mt_method2}"
+#  exit 1
+#fi
+mt_method=${mt_method1}
 
 if [ "${lang_task1_src}" == "${lang_task2_src}" ]; then
   lang_src=${lang_task1_src}
@@ -78,7 +82,11 @@ if [ "$opt_suffix" ]; then
   task="${task}.${opt_suffix}"
 fi
 
-ask_continue ${task}
+if [[ "${opt_yes}" ]]; then
+  :
+else
+  ask_continue ${task}
+fi
 show_exec mkdir -p ${task}
 LOG=${task}/log
 echo "[${stamp} ${HOST}] $0 $*" >> ${LOG}
@@ -103,6 +111,12 @@ case ${mt_method} in
     src_dev=${corpus}/dev.${lang_src}
     src_devtest=${corpus}/devtest.${lang_src}
     ;;
+  x2x)
+    decoder=travatar
+    src_test=${corpus}/test.${lang_src}
+    src_dev=${corpus}/dev.${lang_src}
+    src_devtest=${corpus}/devtest.${lang_src}
+    ;;
   t2s)
     decoder=travatar
     src_test=${corpus}/test.tree.${lang_src}
@@ -110,7 +124,7 @@ case ${mt_method} in
     src_devtest=${corpus}/devtest.tree.${lang_src}
     ;;
   *)
-    echo "mt_methos should be one of pbmt/hiero/t2s"
+    echo "mt_method should be one of pbmt/hiero/t2s/x2x"
     exit 1
     ;;
 esac
@@ -138,12 +152,12 @@ case ${decoder} in
 esac
 
 
-if [ -f ${transdir}/model/moses.ini ]; then
+if [ -f ${plain_ini} ]; then
   echo [autoskip] integrate
 else
   show_exec mkdir -p ${transdir}/model
-  ${dir}/wait-file.sh ${task1}/TM/model/moses.ini
-  ${dir}/wait-file.sh ${task2}/TM/model/moses.ini
+  ${dir}/wait-file.sh ${task1}/TM/model/${decoder}.ini
+  ${dir}/wait-file.sh ${task2}/TM/model/${decoder}.ini
 
   # COPYING CORPUS
   show_exec mkdir -p ${corpus}
@@ -164,17 +178,27 @@ else
     show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task2}/TM/model/moses.ini ${corpus}/devtest.${lang_src}
     show_exec mv ${workdir}/filtered/phrase-table*.gz ${workdir}/phrase_filtered2.gz
     show_exec rm -rf ${workdir}/filtered
-  elif [ "${mt_method}" == "t2s" ]; then
-    # REVERSING
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/reverse.py ${task1}/TM/model/rule-table.gz ${workdir}/rule_s2t
-#    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \| gzip \> ${workdir}/rule_filtered.gz
-#    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
-    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.${lang_src} \> ${workdir}/rule_filtered.gz
-  elif [ "${mt_method}" == "hiero" ]; then
-    # FILTERING
-#    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
-#    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered
-    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.${lang_src} \> ${workdir}/rule_filtered
+  elif [ "${decoder}" == "travatar" ]; then
+    :
+#    show_exec mkdir -p ${workdir}/integrate
+#    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.${lang_src} \| pv -l \> ${workdir}/integrate/rule_filtered1
+#    show_exec zcat ${task2}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.${lang_src} \| pv -l \> ${workdir}/integrate/rule_filtered2
+#  elif [ "${mt_method}" == "t2s" ]; then
+#    # REVERSING
+#    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/reverse.py ${task1}/TM/model/rule-table.gz ${workdir}/rule_s2t
+##    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \| gzip \> ${workdir}/rule_filtered.gz
+##    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
+#    show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.${lang_src} \> ${workdir}/rule_filtered.gz
+#  elif [ "${mt_method}" == "hiero" ]; then
+#    # FILTERING
+##    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
+##    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered
+#    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.${lang_src} \> ${workdir}/rule_filtered
+#  elif [ "${mt_method}" == "x2x" ]; then
+#    # FILTERING
+##    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered.gz
+##    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.true.${lang_src} \> ${workdir}/rule_filtered
+#    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${corpus}/devtest.${lang_src} \> ${workdir}/rule_filtered
   fi
 
   if [ "${LEX_METHOD}" != "interpolate" ]; then
@@ -229,10 +253,26 @@ else
     show_exec sed -e "'s#$(abspath ${task1})#$(abspath ${task})#g'" -e "'s#KENLM.*#${lm_param}#'" ${task1}/TM/model/moses.ini \> ${transdir}/model/moses.ini
     show_exec rm -rf ${workdir}/phrase_filtered*.gz
     show_exec rm -rf ${workdir}/lex*
-  elif [ "${mt_method}" == "hiero" ]; then
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/integrate.py ${workdir}/phrase_filtered1.gz ${workdir}/phrase_filtered2.gz ${transdir}/model/phrase-table.gz ${options}
+#  elif [ "${mt_method}" == "hiero" ]; then
+  elif [ "${decoder}" == "travatar" ]; then
+#    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/integrate.py ${workdir}/phrase_filtered1.gz ${workdir}/phrase_filtered2.gz ${transdir}/model/phrase-table.gz ${options}
+#    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/integrate.py ${workdir}/integrate/rule_filtered1 ${workdir}/integrate/rule_filtered2 ${transdir}/model/rule-table.gz ${options}
+    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/integrate.py ${task1}/TM/model/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options} --method=${METHOD} --lexmethod=${LEX_METHOD}
+    if [[ "${METHOD}" == "flexible" ]]; then
+      show_exec cat ${task1}/TM/model/travatar.ini \| sed -Ee "'s#$(abspath ${task1})#$(abspath ${task})#g'" -e "'/^(egf|fge)/ d'" -e "'/weight_vals/ a 0egfp=0.05\n0egfl=0.05\n0fgep=0.05\n0fgel=0.05\n1egfp=0.05\n1egfl=0.05\n1fgep=0.05\n1fgel=0.05'" \> ${plain_ini}
+    else
+      show_exec cat ${task1}/TM/model/travatar.ini \| sed -e "'s#$(abspath ${task1})#$(abspath ${task})#g'" \> ${plain_ini}
+    fi
+    show_exec cp ${task1}/TM/model/glue-rules ${task}/TM/model
+    show_exec mkdir -p ${task}/LM
+    show_exec ln ${task1}/LM/blm.${lang_trg} ${task}/LM
   fi
   show_exec rm -rf ${workdir}/integrate
+fi
+
+if [ "${opt_skip_test}" ]; then
+  echo "Exit without testing"
+  exit 0
 fi
 
 # -- TESTING PLAIN --
@@ -279,34 +319,7 @@ else
     show_exec mkdir -p ${tunedir}
     show_exec cp ${workdir}/mert-work/travatar.ini ${tunedir}
   fi
-  show_exec rm -rf ${workdir}/mert-work
 fi
-
-
-## -- TESTING --
-#if [ ! $opt_overwrite ] && [ -f ${workdir}/score-dev.out ]; then
-#  echo [autoskip] testing
-#elif [ $opt_skip_test ]; then
-#  echo [skip] testing
-#else
-##if [ $opt_test ]; then
-#  show_exec mkdir -p $workdir
-#  # -- TESTING PRAIN --
-#  show_exec rm -rf ${workdir}/filtered
-##  show_exec ${dir}/filter-moses.sh ${transdir}/model/moses.ini ${corpus}/test.true.${lang_src} ${workdir}/filtered
-#  show_exec ${dir}/filter-moses.sh ${transdir}/model/moses.ini ${corpus}/test.${lang_src} ${workdir}/filtered
-##  show_exec ${dir}/test-moses.sh ${task} ${workdir}/filtered/moses.ini ${corpus}/test.true.${lang_src} ${corpus}/test.true.${lang_trg} plain --threads=${THREADS}
-#  show_exec ${dir}/test-moses.sh ${task} ${workdir}/filtered/moses.ini ${corpus}/test.${lang_src} ${corpus}/test.${lang_trg} plain --threads=${THREADS}
-#  show_exec rm -rf ${workdir}/filtered
-#
-#  if [ -f ${bindir}/moses.ini ]; then
-#    # -- TESTING BINARISED --
-##    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/test.true.${lang_src} ${corpus}/test.true.${lang_trg} tuned --threads=${THREADS}
-#    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/test.${lang_src} ${corpus}/test.${lang_trg} tuned --threads=${THREADS}
-##    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/dev.true.${lang_src} ${corpus}/dev.true.${lang_trg} dev --threads=${THREADS}
-#    show_exec ${dir}/test-moses.sh ${task} ${bindir}/moses.ini ${corpus}/dev.${lang_src} ${corpus}/dev.${lang_trg} dev --threads=${THREADS}
-#  fi
-#fi
 
 # -- TESTING --
 if [ -f ${workdir}/score-dev.out ]; then
@@ -322,6 +335,34 @@ else
       show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_test} ${trg_test} tuned --threads=${THREADS} ${test_options}
       show_exec ${dir}/filter.sh ${mt_method} ${final_ini} ${src_dev}  ${workdir}/filtered
       show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_dev} ${trg_dev} dev --threads=${THREADS} ${test_options}
+    fi
+  fi
+fi
+
+if [ "${opt_ribes}" ]; then
+  # -- TUNING --
+  rtunedir=${task}/rtuned
+  rfinal_ini=${rtunedir}/travatar.ini
+  if [ -f "${rfinal_ini}" ]; then
+    echo [autoskip] ribes tuning
+  elif [ $opt_skip_tuning ]; then
+    echo [skip] ribes tuning
+  else
+    show_exec ${dir}/tune.sh ${mt_method} ${src_dev} ${trg_dev} ${plain_ini} ${task} --threads=${THREADS} --eval=ribes
+    # -- MAKING TUNED DIR --
+    show_exec mkdir -p ${rtunedir}
+    show_exec cp ${workdir}/mert-work-ribes/travatar.ini ${rtunedir}
+  fi
+  # -- TESTING --
+  if [ -f ${workdir}/score-rdev.out ]; then
+    echo [autoskip] ribes testing
+  else
+    if [ -f "${rfinal_ini}" ]; then
+      # -- TESTING TUNED AND DEV --
+      show_exec ${dir}/filter.sh ${mt_method} ${rfinal_ini} ${src_test} ${workdir}/filtered
+      show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_test} ${trg_test} rtuned --threads=${THREADS} ${test_options}
+      show_exec ${dir}/filter.sh ${mt_method} ${rfinal_ini} ${src_dev}  ${workdir}/filtered
+      show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_dev} ${trg_dev} rdev --threads=${THREADS} ${test_options}
     fi
   fi
 fi
