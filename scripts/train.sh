@@ -244,7 +244,8 @@ else
         trg_format=word
       fi
       #show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options}
-      show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options} -resume
+#      show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options} -resume
+      show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -src_words ${corpus}/train.${lang1} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options} -resume
       if [[ "${opt_srcfilter}" ]]; then
         show_exec mv ${transdir}/model/rule-table.gz ${transdir}/model/rule-table.full.gz
         show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/filter.py ${transdir}/model/rule-table.full.gz ${transdir}/model/rule-table.gz "'c.s >= ${opt_srcfilter}'" --progress

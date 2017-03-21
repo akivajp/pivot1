@@ -42,10 +42,17 @@ fi
 if [ "${mt_method}" == "pbmt" ]; then
 #  show_exec ${MOSES}/bin/moses -f ${inifile} -threads ${THREADS} \< ${input} \> ${output}
   show_exec ${MOSES}/bin/moses -f ${inifile} -threads ${THREADS} \< ${input} \| tee ${output}
-else
+elif [ "${mt_method}" == "hiero" ]; then
+  show_exec ${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} -trace_out ${trace} -in_format word \< ${input} \| tee ${output}
+elif [ "${mt_method}" == "t2s" ]; then
 #  show_exec ${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} \< ${input} \> ${output}
 #  show_exec ${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} \< ${input} \| tee ${output}
-  show_exec ${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} -trace_out ${trace} \< ${input} \| tee ${output}
+  show_exec ${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} -trace_out ${trace} -in_format penn \< ${input} \| tee ${output}
+elif [ "${mt_method}" == "f2s" ]; then
+  show_exec ${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} -trace_out ${trace} -in_format egret \< ${input} \| tee ${output}
+else
+  echo "Invalid MT method: ${mt_method}" > /dev/stderr
+  exit 1
 fi
 
 if [ "${score}" ]; then

@@ -22,5 +22,5 @@ fi
 
 LOG=${task}/log
 init_cmd=$(head -1 $LOG | sed -e 's/\[.*\] //')
-show_exec ${init_cmd}
+show_exec ${init_cmd} --threads=${THREADS}
 

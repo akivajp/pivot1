@@ -405,6 +405,8 @@ fi
 # -- TESTING PLAIN --
 if [ -f ${workdir}/score-plain.out ]; then
   echo [autoskip] testing plain
+elif [ -f ${workdir}/score-plain0.out ]; then
+  echo [autoskip] testing plain0
 else
   show_exec ${dir}/filter.sh ${mt_method} ${plain_ini} ${src_test} ${workdir}/filtered
   show_exec ${dir}/test.sh ${mt_method} ${task} ${filtered_ini} ${src_test} ${trg_test} plain --threads=${THREADS} ${test_options}
@@ -432,7 +434,9 @@ fi
 
 # -- TESTING --
 if [ -f ${workdir}/score-dev.out ]; then
-  echo [autoskip] testing
+  echo [autoskip] testing dev
+elif [ -f ${workdir}/score-dev0.out ]; then
+  echo [autoskip] testing dev0
 else
   if [ -f "${final_ini}" ]; then
     # -- TESTING TUNED AND DEV --

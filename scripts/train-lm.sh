@@ -13,6 +13,7 @@ usage()
   echo "  --task_name={string}"
   echo "  --here"
   echo "  --skip={integer}"
+  echo "  --ngram={integer}"
 }
 
 if [ ${#ARGS[@]} -lt 2 ]
@@ -25,6 +26,10 @@ lang=${ARGS[0]}
 src=${ARGS[1]}
 name=${ARGS[2]}
 size=${ARGS[3]}
+
+if [ "${opt_ngram}" ]; then
+  ORDER=${opt_ngram}
+fi
 
 let START=1
 if [ $opt_skip ]; then

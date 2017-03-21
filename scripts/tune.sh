@@ -63,6 +63,9 @@ case "${mt_method}" in
   t2s)
     show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/${mert_out} -in-format penn -threads ${THREADS} -eval ${EVAL} -resume
     ;;
+  f2s)
+    show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/${mert_out} -in-format egret -threads ${THREADS} -eval ${EVAL} -resume
+    ;;
   s2s)
     show_exec $TRAVATAR/script/mert/mert-travatar.pl -travatar-config ${inifile} -nbest ${TUNE_NBEST} -src ${src1} -ref ${src2} -travatar-dir ${TRAVATAR} -working-dir ${workdir}/${mert_out} -in-format word -threads ${THREADS} -eval ${EVAL} -resume
     ;;
