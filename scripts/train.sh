@@ -8,7 +8,8 @@ echo "running script with PID: $$"
 usage()
 {
 #  echo "usage: $0 mt_method lang_id1 lang_id2 src1 src2"
-  echo "usage: $0 mt_method lang_id1 lang_id2 src1 src2 lm train_size dev_test_size"
+  echo "usage: $0 mt_method lang_id1 lang_id2 lm train1 train2 dev1 dev2 test1 test2"
+  echo "usage: $0 mt_method lang_id1 lang_id2 src1 src2 lm train_size dev_test_size --format"
   echo "usage: $0 mt_method lang_id1 lang_id2 lm --corpus=corpus_dir"
   echo "usage: $0 mt_method lang_id1 lang_id2 lm --resume"
   echo ""
@@ -26,6 +27,7 @@ usage()
   echo "  --ribes"
   echo "  --normalize"
   echo "  --skip_test"
+  echo "  --format"
 }
 
 mt_method=${ARGS[0]}
@@ -53,6 +55,17 @@ if [ "${opt_corpus}" ]; then
     exit 1
   fi
   lm=${ARGS[3]}
+elif [ "${opt_format}" ]; then
+    if [ ${#ARGS[@]} -lt 8 ]; then
+        usage
+        exit 1
+    else
+        src1=${ARGS[3]}
+        src2=${ARGS[4]}
+        lm=${ARGS[5]}
+        opt_train_size=${ARGS[6]}
+        opt_dev_test_size=${ARGS[7]}
+    fi
 elif [ -f "${task}/corpus/dev.${lang2}" ]; then
   if [ ${#ARGS[@]} -lt 3 ]; then
     usage
@@ -60,15 +73,24 @@ elif [ -f "${task}/corpus/dev.${lang2}" ]; then
   fi
   lm=${ARGS[3]}
 #elif [ ${#ARGS[@]} -lt 5 ]; then
-elif [ ${#ARGS[@]} -lt 8 ]; then
+#elif [ ${#ARGS[@]} -lt 8 ]; then
+#elif [ ${#ARGS[@]} -lt 9 ]; then
+elif [ ${#ARGS[@]} -lt 10 ]; then
   usage
   exit 1
 else
-  src1=${ARGS[3]}
-  src2=${ARGS[4]}
-  lm=${ARGS[5]}
-  opt_train_size=${ARGS[6]}
-  opt_dev_test_size=${ARGS[7]}
+#  src1=${ARGS[3]}
+#  src2=${ARGS[4]}
+#  lm=${ARGS[5]}
+#  opt_train_size=${ARGS[6]}
+#  opt_dev_test_size=${ARGS[7]}
+    lm=${ARGS[3]}
+    arg_train_src=${ARGS[4]}
+    arg_train_trg=${ARGS[5]}
+    arg_dev_src=${ARGS[6]}
+    arg_dev_trg=${ARGS[7]}
+    arg_test_src=${ARGS[8]}
+    arg_test_trg=${ARGS[9]}
 fi
 
 corpus="${task}/corpus"
@@ -163,7 +185,7 @@ else
       show_exec ln ${opt_corpus}/devtest.{$lang1,$lang2} ${corpus}
       show_exec ln ${opt_corpus}/test.{$lang1,$lang2} ${corpus}
       show_exec ln ${opt_corpus}/dev.{$lang1,$lang2} ${corpus}
-    else
+    elif [ "${opt_format}" ]; then
       options=""
       options="$options --train_size=${opt_train_size}"
       options="$options --dev_test_size=${opt_dev_test_size}"
@@ -175,6 +197,26 @@ else
           show_exec cat ${corpus}/${TYPE}.tree.${lang1} \| pv -Wl \| ${TRAVATAR}/src/bin/tree-converter -input_format penn -output_format word \> ${corpus}/${TYPE}.${lang1}
         done
       fi
+    else
+      #options=""
+      #options="$options --train_size=${opt_train_size}"
+      #options="$options --dev_test_size=${opt_dev_test_size}"
+      #options="$options --task_name=${task}"
+      #show_exec "${dir}/format-corpus.sh" ${lang1} ${src1} ${lang2} ${src2} ${options} --threads=${THREADS}
+      #if [ "${SRC_INPUT}" == "penn" ]; then
+      #  for TYPE in train test dev devtest; do
+      #    show_exec mv ${corpus}/${TYPE}.${lang1} ${corpus}/${TYPE}.tree.${lang1}
+      #    show_exec cat ${corpus}/${TYPE}.tree.${lang1} \| pv -Wl \| ${TRAVATAR}/src/bin/tree-converter -input_format penn -output_format word \> ${corpus}/${TYPE}.${lang1}
+      #  done
+      #fi
+      safe_link ${arg_train_src} ${corpus}/train.${lang1}
+      safe_link ${arg_train_trg} ${corpus}/train.${lang2}
+      safe_link ${arg_dev_src} ${corpus}/dev.${lang1}
+      safe_link ${arg_dev_trg} ${corpus}/dev.${lang2}
+      safe_link ${arg_test_src} ${corpus}/test.${lang1}
+      safe_link ${arg_test_trg} ${corpus}/test.${lang2}
+      show_exec cat ${corpus}/dev.${lang1} ${corpus}/dev.${lang1} \> ${corpus}/devtest.${lang1}
+      show_exec cat ${corpus}/dev.${lang2} ${corpus}/dev.${lang2} \> ${corpus}/devtest.${lang2}
     fi
   fi
   #show_exec ${TRAVATAR}/script/train/clean-corpus.pl -max_len ${CLEAN_LENGTH} ${corpus}/train.{$lang1,$lang2} ${corpus}/train.clean.{$lang1,$lang2}
@@ -244,8 +286,9 @@ else
         trg_format=word
       fi
       #show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options}
-#      show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options} -resume
-      show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -src_words ${corpus}/train.${lang1} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options} -resume
+      #show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options} -resume
+      #show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -src_words ${corpus}/train.${lang1} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options} -resume
+      show_exec ${TRAVATAR}/script/train/train-travatar.pl -work_dir ${PWD}/${transdir} -src_file ${src_file} -trg_file ${trg_file} -travatar_dir ${TRAVATAR} -bin_dir ${GIZA} -lm_file ${lm} -threads ${THREADS} -src_format penn -trg_format ${trg_format} -progress -sort_options="-S10%" ${travatar_options} -resume
       if [[ "${opt_srcfilter}" ]]; then
         show_exec mv ${transdir}/model/rule-table.gz ${transdir}/model/rule-table.full.gz
         show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/filter.py ${transdir}/model/rule-table.full.gz ${transdir}/model/rule-table.gz "'c.s >= ${opt_srcfilter}'" --progress
