@@ -14,6 +14,7 @@ usage()
   echo "  --here"
   echo "  --skip={integer}"
   echo "  --ngram={integer}"
+  echo "  --intermediate"
 }
 
 if [ ${#ARGS[@]} -lt 2 ]
@@ -47,7 +48,8 @@ fi
 if [ "${name}" ]; then
   name=${name}
 else
-  name="train"
+  #name="train"
+  name="lm"
 fi
 
 if [ ! -d "${langdir}" ]; then
@@ -55,12 +57,23 @@ if [ ! -d "${langdir}" ]; then
 fi
 
 if [ "${size}" ]; then
-  show_exec cat ${src} \| tail -n +${START} \|  head -n ${size} \| ${BIN}/lmplz -o ${ORDER} \> ${langdir}/${name}.arpa.${lang}
+  #show_exec cat ${src} \| pv -Wl \| tail -n +${START} \|  head -n ${size} \| ${TRAVATAR}/src/kenlm/lm/lmplz -o ${ORDER} \| pv -Wl \> ${langdir}/${name}.arpa.${lang}
+  if [ "${opt_intermediate}" ]; then
+      show_exec cat ${src} \| pv -Wl \| tail -n +${START} \|  head -n ${size} \| ${KENLM}/lmplz -o ${ORDER} --intermediate ${name}.inter.${lang} --discount_fallback
+  else
+      show_exec cat ${src} \| pv -Wl \| tail -n +${START} \|  head -n ${size} \| ${KENLM}/lmplz -o ${ORDER} \| pv -Wl \> ${langdir}/${name}.arpa.${lang} --discount_fallback
+  fi
 else
-#  show_exec ${BIN}/lmplz -o ${ORDER} \< ${src} \> ${langdir}/${name}.arpa.${lang}
-  show_exec cat ${src} \| tail -n +${START} \| ${BIN}/lmplz -o ${ORDER} \< ${src} \> ${langdir}/${name}.arpa.${lang}
+  if [ "${opt_intermediate}" ]; then
+    show_exec cat ${src} \| pv -Wl \| tail -n +${START} \| ${KENLM}/lmplz -o ${ORDER} --intermediate ${name}.inter.${lang} --discount_fallback
+  else
+    show_exec cat ${src} \| pv -Wl \| tail -n +${START} \| ${KENLM}/lmplz -o ${ORDER} \| pv -Wl \> ${langdir}/${name}.arpa.${lang} --discount_fallback
+  fi
 fi
 
 # -- BINARISING --
-show_exec ${BIN}/build_binary -i ${langdir}/${name}.arpa.${lang} ${langdir}/${name}.blm.${lang}
+#show_exec ${TRAVATAR}/src/kenlm/lm/build_binary -i ${langdir}/${name}.arpa.${lang} ${langdir}/${name}.blm.${lang}
+if [ ! "${opt_intermediate}" ]; then
+    show_exec ${KENLM}/build_binary -i ${langdir}/${name}.arpa.${lang} ${langdir}/${name}.blm.${lang}
+fi
 
