@@ -22,9 +22,11 @@ usage()
   echo "  --method={prodprob,countmin}"
   echo "  --lexmethod={prodweight,countmin}"
   echo "  --jointmethod={memoryless,independent}"
-  echo "  --noprefilter"
+  #echo "  --noprefilter"
+  echo "  --prefilter"
   echo "  --nulls={int}"
 #  echo "  --match={tree,tag,string}"
+  echo "  --matching={symbols,treecomp,treedist}"
   echo "  --multitarget"
   echo "  --coocfilter={float}"
   echo "  --ribes"
@@ -251,18 +253,26 @@ else
 #  show_exec mkdir -p ${langdir}
 #  show_exec cp ${task2}/LM_${lang_trg}/train.blm.${lang_trg} ${langdir}
 
-  if [ "${mt_method}" == "pbmt" ]; then
-    show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task1}/TM/model/moses.ini ${src_devtest}
-    show_exec mv ${workdir}/filtered/phrase-table*.gz ${workdir}/phrase_filtered.gz
-    show_exec rm -rf ${workdir}/filtered
-  elif [[ "${mt_method}" =~ (s2s|x2x) ]]; then
-    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/reverse.py ${task1}/TM/model/rule-table.gz ${workdir}/rule_s2t
-    #show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \> ${workdir}/rule_filtered
-    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \| pv -WN filtered \> ${workdir}/rule_filtered
-  elif [ "${mt_method}" == "hiero" ]; then
-    # FILTERING
-#    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \> ${workdir}/rule_filtered
-    show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \| pv -WN filtered \> ${workdir}/rule_filtered
+  if [ "${opt_prefilter}" ]; then
+    if [ "${mt_method}" == "pbmt" ]; then
+      show_exec ${MOSES}/scripts/training/filter-model-given-input.pl ${workdir}/filtered ${task1}/TM/model/moses.ini ${src_devtest}
+      #show_exec mv ${workdir}/filtered/phrase-table*.gz ${workdir}/phrase_filtered.gz
+      show_exec mv ${workdir}/filtered/phrase-table*.gz ${workdir}/phrase-table.src-pvt.filtered.gz
+      show_exec rm -rf ${workdir}/filtered
+      table_srcpvt=${workdir}/phrase-table.src-pvt.filtered.gz
+    elif [[ "${mt_method}" =~ (hiero|s2s|x2x) ]]; then
+      #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/reverse.py ${task1}/TM/model/rule-table.gz ${workdir}/rule_s2t
+      #show_exec cat ${workdir}/rule_s2t \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \> ${workdir}/rule_filtered
+      show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \| pv -WN filtered \> ${workdir}/rule-table.src-pvt.filtered
+      #show_exec zcat ${task1}/TM/model/rule-table.gz \| ${TRAVATAR}/script/train/filter-rule-table.py ${src_devtest} \| pv -WN filtered \| gzip \> ${workdir}/rule_src-pvt.gz
+      table_srcpvt=${workdir}/rule-table.src-pvt.filtered
+    fi
+  else
+    if [ "${mt_method}" == "pbmt" ]; then
+      table_srcpvt=${task1}/TM/model/phrase-table.gz
+    elif [[ "${mt_method}" =~ (hiero|s2s|x2x) ]]; then
+      table_srcpvt=${task1}/TM/model/rule-table.gz
+    fi
   fi
 
   if [ "${LEX_METHOD}" != "prodweight" ] && [ "${LEX_METHOD}" != "table" ]; then
@@ -274,20 +284,26 @@ else
       # 共起回数ピボットの場合、事前に語彙翻訳確率の算出が必要
       show_exec mkdir -p ${transdir}/model
       if [ "${decoder}" == "moses" ]; then
-        show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/align2lex.py ${task1}/corpus/train.clean.{$lang_src,$lang_pvt} ${task1}/TM/model/aligned.grow-diag-final-and ${workdir}/lex_${lang_src}-${lang_pvt}
-        show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/align2lex.py ${task2}/corpus/train.clean.{$lang_pvt,$lang_trg} ${task2}/TM/model/aligned.grow-diag-final-and ${workdir}/lex_${lang_pvt}-${lang_trg}
+        #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/align2lex.py ${task1}/corpus/train.clean.{$lang_src,$lang_pvt} ${task1}/TM/model/aligned.grow-diag-final-and ${workdir}/lex_${lang_src}-${lang_pvt}
+        show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/align2lex.py ${task1}/corpus/train.clean.{$lang_src,$lang_pvt} ${task1}/TM/model/aligned.grow-diag-final-and ${workdir}/lex_${lang_src}-${lang_pvt}
+        #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/align2lex.py ${task2}/corpus/train.clean.{$lang_pvt,$lang_trg} ${task2}/TM/model/aligned.grow-diag-final-and ${workdir}/lex_${lang_pvt}-${lang_trg}
+        show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/align2lex.py ${task2}/corpus/train.clean.{$lang_pvt,$lang_trg} ${task2}/TM/model/aligned.grow-diag-final-and ${workdir}/lex_${lang_pvt}-${lang_trg}
       elif [ "${decoder}" == "travatar" ]; then
-        show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/align2lex.py ${task1}/corpus/train.clean.{$lang_src,$lang_pvt} ${task1}/TM/align/align.txt ${workdir}/lex_${lang_src}-${lang_pvt}
-        show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/align2lex.py ${task2}/corpus/train.clean.{$lang_pvt,$lang_trg} ${task2}/TM/align/align.txt ${workdir}/lex_${lang_pvt}-${lang_trg}
+        #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/align2lex.py ${task1}/corpus/train.clean.{$lang_src,$lang_pvt} ${task1}/TM/align/align.txt ${workdir}/lex_${lang_src}-${lang_pvt}
+        show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/align2lex.py ${task1}/corpus/train.clean.{$lang_src,$lang_pvt} ${task1}/TM/align/align.txt ${workdir}/lex_${lang_src}-${lang_pvt}
+        #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/align2lex.py ${task2}/corpus/train.clean.{$lang_pvt,$lang_trg} ${task2}/TM/align/align.txt ${workdir}/lex_${lang_pvt}-${lang_trg}
+        show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/align2lex.py ${task2}/corpus/train.clean.{$lang_pvt,$lang_trg} ${task2}/TM/align/align.txt ${workdir}/lex_${lang_pvt}-${lang_trg}
       fi
       align_lex_method=$(echo $LEX_METHOD | sed -e 's/\(.*\)+table/\1/')
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/pivot_lex.py ${workdir}/lex_${lang_src}-${lang_pvt} ${workdir}/lex_${lang_pvt}-${lang_trg} ${alignlex} --method ${align_lex_method}
+      #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/pivot_lex.py ${workdir}/lex_${lang_src}-${lang_pvt} ${workdir}/lex_${lang_pvt}-${lang_trg} ${alignlex} --method ${align_lex_method}
+      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/pivot_lex.py ${workdir}/lex_${lang_src}-${lang_pvt} ${workdir}/lex_${lang_pvt}-${lang_trg} ${alignlex} --method ${align_lex_method}
     fi
   fi
 
   # PIVOTING
   show_exec mkdir -p ${transdir}/model
   options="--workdir ${workdir}"
+  options="${options} --log ${transdir}/model/triangulate.log"
   options="${options} --nbest ${NBEST}"
   options="${options} --method ${METHOD}"
   options="${options} --lexmethod ${LEX_METHOD}"
@@ -306,28 +322,44 @@ else
     options="${options} --multitarget"
     options="${options} --jointmethod ${JOINT_METHOD}"
   fi
+  if [ "${opt_matching}" ]; then
+    options="${options} --matchmethod=${opt_matching}"
+  fi
   if [ "${mt_method}" == "pbmt" ]; then
 #    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/triangulate.py ${task1}/TM/model/phrase-table.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz ${options}
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/triangulate.py ${workdir}/phrase_filtered.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz ${options}
+    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/phrasetable/triangulate.py ${workdir}/phrase_filtered.gz ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz ${options}
+    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/triangulate.py ${table_srcpvt} ${task2}/TM/model/phrase-table.gz ${transdir}/model/phrase-table.gz ${options}
     show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/moses.ini \> ${plain_ini}
     rm ${workdir}/phrase_filtered.gz
   elif [ "${mt_method}" == "hiero" ]; then
 #    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/triangulate.py ${workdir}/rule_filtered.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/triangulate.py ${task1}/TM/model/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/run-triangulate.py ${task1}/TM/model/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/run-triangulate.py ${table_srcpvt} ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
     show_exec cp ${task2}/TM/model/glue-rules ${transdir}/model/
     show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/travatar.ini \> ${plain_ini}
     if [[ "${opt_coocfilter}" ]]; then
       show_exec mv ${transdir}/model/rule-table.gz ${transdir}/model/rule-table.full.gz
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/filter.py ${transdir}/model/rule-table.full.gz ${transdir}/model/rule-table.gz "'c.c >= ${opt_coocfilter}'" --progress
+      #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/filter.py ${transdir}/model/rule-table.full.gz ${transdir}/model/rule-table.gz "'c.c >= ${opt_coocfilter}'" --progress
+      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/filter.py ${transdir}/model/rule-table.full.gz ${transdir}/model/rule-table.gz "'c.c >= ${opt_coocfilter}'" --progress
     fi
-    rm ${workdir}/rule_filtered ${workdir}/rule_filtered.index
+    #rm ${workdir}/rule_filtered ${workdir}/rule_filtered.index
+    rm -rf ${workdir}/rule_filtered ${workdir}/rule_filtered.index
   elif [[ "${mt_method}" =~ (s2s|x2x) ]]; then
 #    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
-    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/make_glue_rules.py ${transdir}/model/rule-table.gz ${transdir}/model/glue-rules -p
+    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/triangulate.py ${workdir}/rule_filtered ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/triangulate.py ${workdir}/rule_src-pvt.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/triangulate.py ${task1}/TM/model/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/run-triangulate.py ${task1}/TM/model/rule-table.gz ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/run-triangulate.py ${table_srcpvt} ${task2}/TM/model/rule-table.gz ${transdir}/model/rule-table.gz ${options}
+    #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/make_glue_rules.py ${transdir}/model/rule-table.gz ${transdir}/model/glue-rules -p
+    show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/make_glue_rules.py ${transdir}/model/rule-table.gz ${transdir}/model/glue-rules -p
     if [[ "${opt_coocfilter}" ]]; then
       show_exec mv ${transdir}/model/rule-table.gz ${transdir}/model/rule-table.full.gz
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/filter.py ${transdir}/model/rule-table.full.gz ${transdir}/model/rule-table.gz "'c.c >= ${opt_coocfilter}'" --progress
+      #show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/filter.py ${transdir}/model/rule-table.full.gz ${transdir}/model/rule-table.gz "'c.c >= ${opt_coocfilter}'" --progress
+      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/nlputils/smt/trans_models/filter.py ${transdir}/model/rule-table.full.gz ${transdir}/model/rule-table.gz "'c.c >= ${opt_coocfilter}'" --progress
     fi
     #show_exec sed -e "s/${task2}/${task}/g" ${task2}/TM/model/travatar.ini \> ${plain_ini}
     show_exec cat ${task2}/TM/model/travatar.ini \| sed -e "'s:${task2}:${task}:g'" -e "'s/^unk=.*/unk=-1/g'" -e "'/rule-table.gz/a $(abspath ${transdir}/model/glue-rules)'" \> ${plain_ini}
@@ -359,6 +391,9 @@ else
 
     echo "x0:X @ S ||| x0:X @ S |COL| x0:X @ S ||| " > ${transdir}/model/glue-rules
     echo "x0:S x1:X @ S ||| x0:S x1:X @ S |COL| x0:S x1:X @ S ||| glue=1" >> ${transdir}/model/glue-rules
+    #echo "x0:S x1:X @ S ||| x0:S x1:X @ S |COL| x1:X x0:S @ S ||| glue=1" >> ${transdir}/model/glue-rules
+    #echo "x0:S x1:X @ S ||| x1:X x0:S @ S |COL| x0:S x1:X @ S ||| glue=1" >> ${transdir}/model/glue-rules
+    #echo "x0:S x1:X @ S ||| x1:X x0:S @ S |COL| x1:X x0:S @ S ||| glue=1" >> ${transdir}/model/glue-rules
 
     lm_trg=$(ls $langdir | grep blm.$lang_trg)
     lm_pvt=$(ls $langdir | grep blm.$lang_pvt)
@@ -384,9 +419,15 @@ else
     echo "[trg_factors]" >> ${transdir}/model/travatar.ini
     echo "2" >> ${transdir}/model/travatar.ini
     echo "" >> ${transdir}/model/travatar.ini
+    #echo "[hiero_span_limit]" >> ${transdir}/model/travatar.ini
+    #echo "20" >> ${transdir}/model/travatar.ini
+    #echo "1000" >> ${transdir}/model/travatar.ini
     echo "[hiero_span_limit]" >> ${transdir}/model/travatar.ini
-    echo "20" >> ${transdir}/model/travatar.ini
-    echo "1000" >> ${transdir}/model/travatar.ini
+    echo "60" >> ${transdir}/model/travatar.ini
+    echo "3000" >> ${transdir}/model/travatar.ini
+    echo "" >> ${transdir}/model/travatar.ini
+    echo "[pop_limit]" >> ${transdir}/model/travatar.ini
+    echo "5000" >> ${transdir}/model/travatar.ini
     echo "" >> ${transdir}/model/travatar.ini
     echo "[weight_vals]" >> ${transdir}/model/travatar.ini
     echo "0egfp=0.05" >> ${transdir}/model/travatar.ini
