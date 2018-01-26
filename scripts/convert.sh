@@ -7,7 +7,7 @@ echo "running script with PID: $$"
 
 usage()
 {
-  echo "usage: $0 mt_method lang_id1 lang_id2"
+  echo "usage: $0 mt_method lang_id1 lang_id2 [basetask]"
   echo ""
   echo "mt_method: {tp,sp,gp,xp}2{s,x}/{s,x}2{tp,sp,gp,xp}"
   echo ""
@@ -30,6 +30,7 @@ else
   mt_method=${ARGS[0]}
   lang1=${ARGS[1]}
   lang2=${ARGS[2]}
+  basetask=${ARGS[3]}
 fi
 
 SRC_INPUT="word"
@@ -90,27 +91,27 @@ case ${decoder} in
     ;;
 esac
 
-case "${mt_method}" in
-  ?p2*)
-    BASE_TASK=t2s_${lang1}-${lang2}
-    if [ ! -f "${BASE_TASK}/TM/model/travatar.ini" ]; then
-      echo "[error] base task \"${BASE_TASK}\" is not trained" > /dev/stderr
+if [ "${basetask}" ]; then
+  :
+else
+  case "${mt_method}" in
+    ?p2*) basetask=t2s_${lang1}-${lang2} ;;
+    *2?p) basetask=t2s_${lang2}-${lang1} ;;
+    *)
+      echo "Cannot resolve base task directory: ${mt_method}"
       exit 1
-    fi
-    ;;
-  *2?p)
-    BASE_TASK=t2s_${lang2}-${lang1}
-    if [ ! -f "${BASE_TASK}/TM/model/travatar.ini" ]; then
-      echo "[error] base task \"${BASE_TASK}\" is not trained" > /dev/stderr
-      exit 1
-    fi
-    ;;
-  *)
-    echo "Cannot resolve base task directory: ${mt_method}"
-    exit 1
-    ;;
-esac
+      ;;
+  esac
+fi
+if [ ! -f "${basetask}/TM/model/travatar.ini" ]; then
+  echo "[error] base task \"${basetask}\" is not trained" > /dev/stderr
+  exit 1
+fi
 
+if [ -f "${task}/TM/model/travatar.ini" ]; then
+  echo "[skip] ${task}/TM/model/travatar.ini exists"
+  exit 0
+fi
 ask_continue ${task}
 
 TM_FILE="${transdir}/model/rule-table.gz"
@@ -127,16 +128,16 @@ if [ ! -f ${plain_ini} ]; then
   LEX_SRCTRG="${task}/TM/lex/src_given_trg.lex"
   EXTRACT_FILE="${transdir}/model/extract.gz"
 #  if [ "${lang1}" == "en" ]; then
-#    EXTRACT_FILE_REV="${BASE_TASK}/TM/model/extract.gz"
+#    EXTRACT_FILE_REV="${basetask}/TM/model/extract.gz"
 #  elif [ "${lang2}" == "en" ]; then
-#    EXTRACT_FILE_REV="${BASE_TASK}/TM/model/extract.gz"
+#    EXTRACT_FILE_REV="${basetask}/TM/model/extract.gz"
 #  fi
 
   if [ ! -d ${task} ]; then
     show_exec mkdir -p ${transdir}/model
     LOG=${task}/log
     echo "[$(get_stamp) ${HOST}] $0 $*" >> ${LOG}
-    show_exec ln ${BASE_TASK}/TM/model/fof.txt ${transdir}/model/
+    show_exec ln ${basetask}/TM/model/fof.txt ${transdir}/model/
   else
     LOG=${task}/log
   fi
@@ -144,11 +145,11 @@ if [ ! -f ${plain_ini} ]; then
   if [ ! -d ${task}/TM/lex ]; then
     show_exec mkdir -p ${task}/TM/lex
     if [[ "${mt_method}" =~ .p2. ]]; then
-      show_exec ln ${BASE_TASK}/TM/lex/src_given_trg.lex ${task}/TM/lex/
-      show_exec ln ${BASE_TASK}/TM/lex/trg_given_src.lex ${task}/TM/lex/
+      show_exec ln ${basetask}/TM/lex/src_given_trg.lex ${task}/TM/lex/
+      show_exec ln ${basetask}/TM/lex/trg_given_src.lex ${task}/TM/lex/
     elif [[ "${mt_method}" =~ .2.p ]]; then
-      show_exec ln ${BASE_TASK}/TM/lex/src_given_trg.lex ${task}/TM/lex/trg_given_src.lex
-      show_exec ln ${BASE_TASK}/TM/lex/trg_given_src.lex ${task}/TM/lex/src_given_trg.lex
+      show_exec ln ${basetask}/TM/lex/src_given_trg.lex ${task}/TM/lex/trg_given_src.lex
+      show_exec ln ${basetask}/TM/lex/trg_given_src.lex ${task}/TM/lex/src_given_trg.lex
       #show_exec "zcat ${EXTRACT_FILE_REV} | ${TRAVATAR}/script/train/reverse-rt.pl | ${PV_PIPE} | gzip > ${EXTRACT_FILE}"
     else
       echo "Error: ${mt_method} =~ .p2. or .2.p" > /dev/stderr
@@ -159,66 +160,70 @@ if [ ! -f ${plain_ini} ]; then
   if [[ "${mt_method}" =~ .p2. ]]; then
     if [[ ! -d ${task}/LM ]]; then
       show_exec mkdir -p ${task}/LM
-      show_exec ln ${BASE_TASK}/LM/* ${task}/LM
+      show_exec ln ${basetask}/LM/* ${task}/LM
     fi
   fi
 
+  converter="${PYTHONPATH}/nlputils/smt/trans_models/convert_extract.py"
   case "${mt_method}" in
     tp2s)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg -p
       ;;
     tp2x)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero -p
       ;;
     sp2s)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --flatten=scfg -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --flatten=scfg -p
       ;;
     sp2x)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --flatten=scfg -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --flatten=scfg -p
       ;;
     gp2s)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --flatten=tag -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --flatten=tag -p
       ;;
     gp2x)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --flatten=tag -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --flatten=tag -p
       ;;
     xp2s)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --flatten=hiero -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --flatten=hiero -p
       ;;
     xp2x)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --flatten=hiero -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --flatten=hiero -p
       ;;
     s2tp)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --reverse --no-unary -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --reverse --no-unary -p
       ;;
     s2sp)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --flatten=scfg --reverse --no-unary -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --flatten=scfg --reverse --no-unary -p
       ;;
     s2gp)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --flatten=tag --reverse --no-unary -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --flatten=tag --reverse --no-unary -p
       ;;
     s2xp)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --flatten=hiero --reverse --no-unary -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=scfg --flatten=hiero --reverse --no-unary -p
       ;;
     x2tp)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --reverse --no-unary -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --reverse --no-unary -p
       ;;
     x2sp)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --flatten=scfg --reverse --no-unary -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --flatten=scfg --reverse --no-unary -p
       ;;
     x2gp)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --flatten=tag --reverse --no-unary -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --flatten=tag --reverse --no-unary -p
       ;;
     x2xp)
-      show_exec PYTHONPATH=${PYTHONPATH} ${PYTHONPATH}/exp/ruletable/convert_extract.py ${BASE_TASK}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --flatten=hiero --reverse --no-unary -p
+      show_exec ${converter} ${basetask}/TM/model/extract.gz ${transdir}/model/extract.gz --sync=hiero --flatten=hiero --reverse --no-unary -p
       ;;
   esac
 
-  show_exec "zcat $EXTRACT_FILE | env LC_ALL=C sort $SORT_OPTIONS | $TRAVATAR/script/train/score-t2s.pl --fof-file=$FOF_FILE --lex-prob-file=$LEX_TRGSRC --cond-prefix=egf --joint | env LC_ALL=C sort $SORT_OPTIONS | gzip > $RT_SRCTRG &";
-  show_exec "zcat $EXTRACT_FILE | ${TRAVATAR}/script/train/reverse-rt.pl | $PV_SORT | env LC_ALL=C sort $SORT_OPTIONS | $TRAVATAR/script/train/score-t2s.pl --lex-prob-file=$LEX_SRCTRG --cond-prefix=fge | $TRAVATAR/script/train/reverse-rt.pl | $PV_SORT | env LC_ALL=C sort $SORT_OPTIONS | $PV_PIPE | gzip > $RT_TRGSRC";
+  if [[ "${opt_coocfilter}" ]]; then
+    score_options="${score_options} --cooc-min-freq=${opt_coocfilter}"
+  fi
+  show_exec "zcat $EXTRACT_FILE | env LC_ALL=C sort $SORT_OPTIONS | $TRAVATAR/script/train/score-t2s.pl --fof-file=$FOF_FILE --lex-prob-file=$LEX_TRGSRC --cond-prefix=egf --joint ${score_options} | env LC_ALL=C sort $SORT_OPTIONS | gzip > $RT_SRCTRG &";
+  show_exec "zcat $EXTRACT_FILE | ${TRAVATAR}/script/train/reverse-rt.pl | $PV_SORT | env LC_ALL=C sort $SORT_OPTIONS | $TRAVATAR/script/train/score-t2s.pl --lex-prob-file=$LEX_SRCTRG --cond-prefix=fge ${score_options} | $TRAVATAR/script/train/reverse-rt.pl | $PV_SORT | env LC_ALL=C sort $SORT_OPTIONS | $PV_PIPE | gzip > $RT_TRGSRC";
   show_exec wait
   show_exec "$TRAVATAR/script/train/combine-rt.pl --fof-file=$FOF_FILE --smooth=$SMOOTH --top-n=$NBEST_RULES $RT_SRCTRG $RT_TRGSRC | $PV_PIPE | gzip > $TM_FILE"
-  show_exec cat "${BASE_TASK}/TM/model/travatar.ini" \| sed -e "'s:${BASE_TASK}:${task}:g'" \> ${plain_ini}
+  show_exec cat "${basetask}/TM/model/travatar.ini" \| sed -e "'s:${basetask}:${task}:g'" \> ${plain_ini}
 fi
 
 echo "##### End of script: $0 $*" | tee -a ${LOG}
