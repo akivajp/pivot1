@@ -42,6 +42,12 @@ if [ "$method2" == "hiero" ]; then
   ini2=${taskdir2}/tuned/travatar.ini
 fi
 
+#pop_limit=1000
+pop_limit=100
+if [ "${opt_pop_limit}" ]; then
+    pop_limit=${opt_pop_limit}
+fi
+
 echo METHOD1: $method1
 echo METHOD2: $method2
 echo LANG1: $lang1
@@ -80,7 +86,9 @@ else
     show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini1} ${workdir}/${taskname1}/filtered-test.ini ${workdir}/${taskname1}/filtered-test \"${TRAVATAR}/script/train/filter-rule-table.py ${text}\"
 #    show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini1} ${workdir}/${taskname1}/filtered-test.ini ${workdir}/${taskname1}/filtered-test \"${TRAVATAR}/script/train/filter-rule-table.py ${text} \| pv\"
 #    show_exec ${BIN}/travatar -config_file ${workdir}/${taskname1}/filtered-test.ini -threads ${THREADS} \< ${text} \> ${target1}
-    show_exec ${BIN}/travatar -config_file ${workdir}/${taskname1}/filtered-test.ini -threads ${THREADS} \< ${text} \| tee ${target1}
+    #show_exec ${BIN}/travatar -config_file ${workdir}/${taskname1}/filtered-test.ini -threads ${THREADS} \< ${text} \| tee ${target1}
+    #show_exec cat ${text} \| \(${TRAVATAR}/src/bin/travatar -config_file ${workdir}/${taskname1}/filtered-test.ini -threads ${THREADS} -trace_out ${workdir}/trace-${lang1}${lang2}.out -in_format word 2\> ${workdir}/decode-${lang1}${lang2}.log\) \| pv -l \> ${target1}
+    show_exec cat ${text} \| pv -cl \| \(${TRAVATAR}/src/bin/travatar -config_file ${workdir}/${taskname1}/filtered-test.ini -threads ${THREADS} -trace_out ${workdir}/trace-${lang1}${lang2}.out -in_format word -pop_limit ${pop_limit} 2\> ${workdir}/decode-${lang1}${lang2}.log\) \| pv -cl \> ${target1}
     show_exec rm -rf ${workdir}/${taskname1}
   fi
 fi
@@ -100,7 +108,9 @@ else
     show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini2} ${workdir}/${taskname2}/filtered-test.ini ${workdir}/${taskname2}/filtered-test \"${TRAVATAR}/script/train/filter-rule-table.py ${target1}\"
 #    show_exec ${TRAVATAR}/script/train/filter-model.pl ${ini2} ${workdir}/${taskname2}/filtered-test.ini ${workdir}/${taskname2}/filtered-test \"${TRAVATAR}/script/train/filter-rule-table.py ${target1} \| pv\"
 #    show_exec ${BIN}/travatar -config_file ${workdir}/${taskname2}/filtered-test.ini -threads ${THREADS} \< ${target1} \> ${target2}
-    show_exec ${BIN}/travatar -config_file ${workdir}/${taskname2}/filtered-test.ini -threads ${THREADS} \< ${target1} \| tee ${target2}
+    #show_exec ${BIN}/travatar -config_file ${workdir}/${taskname2}/filtered-test.ini -threads ${THREADS} \< ${target1} \| tee ${target2}
+    #show_exec cat ${target1} \| \(${TRAVATAR}/src/bin/travatar -config_file ${workdir}/${taskname2}/filtered-test.ini -threads ${THREADS} -trace_out ${workdir}/trace-${lang2}${lang3}.out -in_format word 2\> ${workdir}/decode-${lang2}${lang3}.log\) \| pv -l \> ${target2}
+    show_exec cat ${target1} \| pv -cl \| \(${TRAVATAR}/src/bin/travatar -config_file ${workdir}/${taskname2}/filtered-test.ini -threads ${THREADS} -trace_out ${workdir}/trace-${lang2}${lang3}.out -in_format word -pop_limit ${pop_limit} 2\> ${workdir}/decode-${lang2}${lang3}.log\) \| pv -cl \> ${target2}
     show_exec rm -rf ${workdir}/${taskname2}
   fi
 fi
