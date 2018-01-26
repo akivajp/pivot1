@@ -7,7 +7,11 @@ echo "running script with PID: $$"
 
 usage()
 {
-  echo "usage: $0 task_src suffix_trg"
+#  echo "usage: $0 task_src suffix_trg"
+  echo "usage: $0 task_src task_trg"
+  echo ""
+  echo "options:"
+  echo "  --clean"
 }
 
 if [[ ${#ARGS[@]} -lt 2 ]]; then
@@ -17,11 +21,12 @@ fi
 
 #task_src=$(basename ${ARGS[0]})
 task_src=${ARGS[0]}
-suffix_trg=${ARGS[1]}
+#suffix_trg=${ARGS[1]}
+task_trg=${ARGS[1]}
 
-suffix_trg=${suffix_trg#.}
+#suffix_trg=${suffix_trg#.}
 #task_trg="${task_src}.${suffix_trg}"
-task_trg="$(basename ${task_src}).${suffix_trg}"
+#task_trg="$(basename ${task_src}).${suffix_trg}"
 
 if [ -d ${task_trg} ]; then
   echo "directory \"${task_trg}\" is already found"
@@ -48,11 +53,21 @@ show_exec mv ${ini} ${ini}.old
 show_exec cat ${ini}.old \| sed -e "'s:${task_src}:${task_trg}:g'" \> ${ini}
 
 show_exec mv ${log} ${log}.old
-init_cmd=$(head -1 ${log}.old | sed 's/\[.*\] //')
-if (echo $init_cmd | grep ' --suffix' > /dev/null); then
-  init_cmd=$(echo $init_cmd | sed -e "s/--suffix=\\([^ ]*\\)/--suffix=\\1.${suffix_trg}/")
-else
-  init_cmd="${init_cmd} --suffix=${suffix_trg}"
-fi
+#init_cmd=$(head -1 ${log}.old | sed 's/\[.*\] //')
+#if (echo $init_cmd | grep ' --suffix' > /dev/null); then
+#  init_cmd=$(echo $init_cmd | sed -e "s/--suffix=\\([^ ]*\\)/--suffix=\\1.${suffix_trg}/")
+#else
+#  init_cmd="${init_cmd} --suffix=${suffix_trg}"
+#fi
+init_cmd=$(head -1 ${log}.old | sed -e 's/--task_name=[^ ]*//g' -e 's/--suffix=[^ ]*//g' -e 's/--threads=[^ ]*//g' | sed -e 's/  */ /g')
+init_cmd="${init_cmd} --task_name=${task_trg}"
 show_exec echo "[INIT] ${init_cmd}" \> ${log}
+
+if [ "${opt_clean}" ]; then
+    #show_exec rm -rf ${task_trg}/working/score*
+    #show_exec rm -rf ${task_trg}/working/mert-work
+    show_exec rm -rf ${task_trg}/working
+    show_exec rm -rf ${task_trg}/filtered
+    show_exec rm -rf ${task_trg}/tuned
+fi
 
