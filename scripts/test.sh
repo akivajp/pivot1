@@ -33,17 +33,26 @@ show_exec mkdir -p ${workdir}
 if [ "${test_name}" ]; then
   output=${workdir}/translated-${test_name}.out
   trace=${workdir}/trace-${test_name}.out
+  decode_log=${workdir}/decode-${test_name}.log
   score=${workdir}/score-${test_name}.out
 else
   output=${workdir}/translated.out
   trace=${workdir}/trace.out
+  decode_log=${workdir}/decode.log
 fi
 
 if [ "${mt_method}" == "pbmt" ]; then
 #  show_exec ${MOSES}/bin/moses -f ${inifile} -threads ${THREADS} \< ${input} \> ${output}
   show_exec ${MOSES}/bin/moses -f ${inifile} -threads ${THREADS} \< ${input} \| tee ${output}
 elif [ "${mt_method}" == "hiero" ]; then
+  #show_exec ${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} -trace_out ${trace} -in_format word \< ${input} \| tee ${output}
+  show_exec cat ${input} \| pv -cl \| \(${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} -trace_out ${trace} -in_format word 2\> ${decode_log}\) \| pv -cl \> ${output}
+elif [ "${mt_method}" == "s2s" ]; then
   show_exec ${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} -trace_out ${trace} -in_format word \< ${input} \| tee ${output}
+elif [ "${mt_method}" == "x2x" ]; then
+  #show_exec ${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} -trace_out ${trace} -in_format word \< ${input} \| tee ${output}
+  #show_exec cat ${input} \| pv -Wl \| ${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} -trace_out ${trace} -in_format word \> ${output} 2\>\> ${workdir}/decode-${test_name}.log
+  show_exec cat ${input} \| pv -cl \| \(${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} -trace_out ${trace} -in_format word 2\> ${decode_log}\) \| pv -cl \> ${output}
 elif [ "${mt_method}" == "t2s" ]; then
 #  show_exec ${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} \< ${input} \> ${output}
 #  show_exec ${TRAVATAR}/src/bin/travatar -config_file ${inifile} -threads ${THREADS} \< ${input} \| tee ${output}
